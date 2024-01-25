@@ -1,0 +1,9 @@
+#cloud-config
+ssh_pwauth: True
+users:
+  - name: patient0
+    plain_text_passwd: packer
+    sudo: ALL=(ALL) NOPASSWD:ALL
+    groups: users, sudo
+    shell: /bin/bash
+    lock_passwd: false

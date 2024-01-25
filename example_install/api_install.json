@@ -1,0 +1,33 @@
+{
+    "details": {
+        "customHostname": "myHostname"
+    },
+    "partitionSchemeName": "default",
+    "templateName": "byolinux_64",
+    "userMetadata": [
+        {
+            "key": "imageURL",
+            "value": "https://github.com/ashmonger/akution_test/releases/download/0.2-mibsh/deb12.qcow2"
+        },
+        {
+            "key": "httpHeaders0Key",
+            "value": "Authorization"
+        },
+        {
+            "key": "httpHeaders0Value",
+            "value": "Basic dGhlb3dsc2FyZW5vdDp3aGF0dGhleXNlZW1z="
+        },
+        {
+            "key": "imageCheckSum",
+            "value": "6a65719e6a7f276a4b8685d3ace0920d56acef7d4bbbf9427fe188db7b19c23be7fc182f7a9b29e394167717731f4cd7cab410a36e60e6c6451954f3b795a15c"
+        },
+        {
+            "key": "imageCheckSumType",
+            "value": "sha512"
+        },
+        {
+            "key": "configDriveUserData",
+            "value": "#!/bin/bash\necho \"Hi, sounds like BYOLinux as ostemplate is a success!\" >/etc/motd"
+        }
+    ]
+}
