@@ -244,8 +244,8 @@ For more information and examples about Cloud-Init's ConfigDrive, please read th
 1. Partitioning the disks
 2. Creating a `config-drive` partition
 3. Download and burn the customer's image
-4. Run `make_image_bootable.sh`
-5. Set boot order
+4. Set boot order
+5. Run `make_image_bootable.sh`
 6. Reboot
 
 <a name="partdisk"></a>
@@ -284,9 +284,15 @@ All the content of the image is then `rsynced` to the disks
 ### `make_image_bootable.sh`
 
 `make_image_bootable.sh` have to be located in `/root/.ovh/` and be executable.  
-This is used to re/install and configure `GRUB`, and rebuild the initramfs.
 
-See [`make_image_bootable.sh`](examples/make_image_bootable.sh) example file.
+The script is executed once, right after the image is deployed on partitioned disk, and right before the first reboot into the new installation.  
+
+The script can be used, for instance, to generate an adhoc initramfs, embedding drivers dedicated to the system the image will boot on. 
+
+> There is no internet access at this moment, so if you try to install something not
+already in the image, it will fail. 
+
+See [`make_image_bootable.sh`](example_build/files/make_image_bootable.sh) example file.
 
 <a name="links"></a>
 
