@@ -12,15 +12,21 @@ apt-get -y purge grub-cloud-amd64
 # grub-pc or grub-efi-amd64's postinst.
 cp /usr/share/grub/default/grub /etc/default/grub
 
+apt-get update
+
 # Add contrib to allow ZFS installation
 # Add non-free-firmware for AMD and Intel microcodes
-sed -i "s/\bmain\b/& contrib non-free/" /etc/apt/sources.list
+apt-get -y install --no-install-recommends lsb-release
+if [ $(lsb_release -rs 2>/dev/null) -ge 12 ];
+then
+	sed -i "s/\bmain\b/& contrib non-free-firmware/" /etc/apt/sources.list.d/debian.sources
+else
+	sed -i "s/\bmain\b/& contrib non-free/" /etc/apt/sources.list
+fi
 
 apt-get update
 
-kernel=$(apt-cache search linux-image-6 | grep -vE 'rt|cloud|unsigned|headers|dbg' | awk '{ print $1 }')
-
-apt-get -y install --no-install-recommends "${kernel}"
+apt-get -y install --no-install-recommends linux-image-amd64
 
 apt-get -y install --no-install-recommends mdadm lvm2 patch btrfs-progs amd64-microcode intel-microcode
 # We will install these in make_image_bootable.sh and only when ZFS is used
@@ -36,7 +42,6 @@ echo "grub-efi-amd64 grub2/update_nvram boolean false" | debconf-set-selections
 
 # Cleanup
 apt-get -y autoremove
-apt-get -y clean
 apt-get -y autoclean
 
 # Disable some cloud-init options:
