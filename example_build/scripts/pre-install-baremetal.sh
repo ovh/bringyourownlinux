@@ -18,9 +18,7 @@ sed -i "s/\bmain\b/& contrib non-free/" /etc/apt/sources.list
 
 apt-get update
 
-kernel=$(apt-cache search linux-image-6 | grep -vE 'rt|cloud|unsigned|headers|dbg' | awk '{ print $1 }')
-
-apt-get -y install --no-install-recommends "${kernel}"
+apt-get -y install --no-install-recommends linux-image-amd64
 
 apt-get -y install --no-install-recommends mdadm lvm2 patch btrfs-progs amd64-microcode intel-microcode
 # We will install these in make_image_bootable.sh and only when ZFS is used
