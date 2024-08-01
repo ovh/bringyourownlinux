@@ -42,7 +42,6 @@ echo "grub-efi-amd64 grub2/update_nvram boolean false" | debconf-set-selections
 
 # Cleanup
 apt-get -y autoremove
-apt-get -y clean
 apt-get -y autoclean
 
 # Disable some cloud-init options:
