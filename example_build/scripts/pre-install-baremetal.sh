@@ -12,9 +12,17 @@ apt-get -y purge grub-cloud-amd64
 # grub-pc or grub-efi-amd64's postinst.
 cp /usr/share/grub/default/grub /etc/default/grub
 
+apt-get update
+
 # Add contrib to allow ZFS installation
 # Add non-free-firmware for AMD and Intel microcodes
-sed -i "s/\bmain\b/& contrib non-free/" /etc/apt/sources.list
+apt-get -y install --no-install-recommends lsb-release
+if [ $(lsb_release -rs 2>/dev/null) -ge 12 ];
+then
+	sed -i "s/\bmain\b/& contrib non-free-firmware/" /etc/apt/sources.list.d/debian.sources
+else
+	sed -i "s/\bmain\b/& contrib non-free/" /etc/apt/sources.list
+fi
 
 apt-get update
 
