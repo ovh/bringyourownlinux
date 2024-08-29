@@ -4,8 +4,14 @@ set -euo pipefail
 
 export DEBIAN_FRONTEND=noninteractive
 
+# This forces GRUB to use PARTUUID instead of UUID for root=, which does not
+# work for us, see
+# https://salsa.debian.org/cloud-team/debian-cloud-images/-/merge_requests/388
+rm /etc/default/grub.d/10_cloud.cfg
+
 # grub-cloud can cause problems after the server is installed
-apt-get -y purge grub-cloud-amd64
+# purge the old kernels
+apt-get -y purge grub-cloud-amd64 linux-image-*
 # Restore a default grub config as the old file belonged to grub-cloud-amd64 and got removed
 # by the purge.
 # Copying /usr/share/grub/default/grub to /etc/default/grub is otherwise done by
@@ -18,9 +24,8 @@ sed -i "s/\bmain\b/& contrib non-free/" /etc/apt/sources.list
 
 apt-get update
 
-kernel=$(apt-cache search linux-image-6 | grep -vE 'rt|cloud|unsigned|headers|dbg' | awk '{ print $1 }')
-
-apt-get -y install --no-install-recommends "${kernel}"
+# Install the backported kernel
+apt-get -y install --no-install-recommends -t bullseye-backports linux-image-amd64
 
 apt-get -y install --no-install-recommends mdadm lvm2 patch btrfs-progs amd64-microcode intel-microcode
 # We will install these in make_image_bootable.sh and only when ZFS is used
@@ -28,16 +33,15 @@ apt-get -y install --no-install-recommends mdadm lvm2 patch btrfs-progs amd64-mi
 apt-get -y install --no-install-recommends --download-only linux-headers-amd64 zfs-dkms zfs-initramfs zfs-zed
 apt-get -y dist-upgrade
 
+# Cleanup
+apt-get -y autoremove
+apt-get -y clean
+
 # Download GRUB for legagy and UEFI servers, both can't be installed simultaneously.
 apt-get -y install --no-install-recommends --download-only grub-efi-amd64
 apt-get -y install --no-install-recommends --download-only grub-pc
 # Make sure grub-efi-amd64 won't change the boot order.
 echo "grub-efi-amd64 grub2/update_nvram boolean false" | debconf-set-selections
-
-# Cleanup
-apt-get -y autoremove
-apt-get -y clean
-apt-get -y autoclean
 
 # Disable some cloud-init options:
 # grub-dpkg sets an incorrect value to "grub-pc/install_devices".
