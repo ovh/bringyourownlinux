@@ -28,16 +28,15 @@ apt-get -y install --no-install-recommends mdadm lvm2 patch btrfs-progs amd64-mi
 apt-get -y install --no-install-recommends --download-only linux-headers-amd64 zfs-dkms zfs-initramfs zfs-zed
 apt-get -y dist-upgrade
 
+# Cleanup
+apt-get -y autoremove
+apt-get -y clean
+
 # Download GRUB for legagy and UEFI servers, both can't be installed simultaneously.
 apt-get -y install --no-install-recommends --download-only grub-efi-amd64
 apt-get -y install --no-install-recommends --download-only grub-pc
 # Make sure grub-efi-amd64 won't change the boot order.
 echo "grub-efi-amd64 grub2/update_nvram boolean false" | debconf-set-selections
-
-# Cleanup
-apt-get -y autoremove
-apt-get -y clean
-apt-get -y autoclean
 
 # Disable some cloud-init options:
 # grub-dpkg sets an incorrect value to "grub-pc/install_devices".
