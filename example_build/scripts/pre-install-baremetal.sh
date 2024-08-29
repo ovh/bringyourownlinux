@@ -4,6 +4,11 @@ set -euo pipefail
 
 export DEBIAN_FRONTEND=noninteractive
 
+# This forces GRUB to use PARTUUID instead of UUID for root=, which does not
+# work for us, see
+# https://salsa.debian.org/cloud-team/debian-cloud-images/-/merge_requests/388
+rm /etc/default/grub.d/10_cloud.cfg
+
 # grub-cloud can cause problems after the server is installed
 # purge the old kernels
 apt-get -y purge grub-cloud-amd64 linux-image-*
