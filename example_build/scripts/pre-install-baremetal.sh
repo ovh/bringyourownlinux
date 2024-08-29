@@ -5,7 +5,8 @@ set -euo pipefail
 export DEBIAN_FRONTEND=noninteractive
 
 # grub-cloud can cause problems after the server is installed
-apt-get -y purge grub-cloud-amd64
+# purge the old kernels
+apt-get -y purge grub-cloud-amd64 linux-image-*
 # Restore a default grub config as the old file belonged to grub-cloud-amd64 and got removed
 # by the purge.
 # Copying /usr/share/grub/default/grub to /etc/default/grub is otherwise done by
@@ -18,9 +19,8 @@ sed -i "s/\bmain\b/& contrib non-free/" /etc/apt/sources.list
 
 apt-get update
 
-kernel=$(apt-cache search linux-image-6 | grep -vE 'rt|cloud|unsigned|headers|dbg' | awk '{ print $1 }')
-
-apt-get -y install --no-install-recommends "${kernel}"
+# Install the backported kernel
+apt-get -y install --no-install-recommends -t bullseye-backports linux-image-amd64
 
 apt-get -y install --no-install-recommends mdadm lvm2 patch btrfs-progs amd64-microcode intel-microcode
 # We will install these in make_image_bootable.sh and only when ZFS is used
