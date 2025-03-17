@@ -21,10 +21,10 @@
 
 ## What is it?
 
-Bring Your Own Linux is somewhat of an extension of the [Bring Your Own Image](https://help.ovhcloud.com/csm/en-gb-dedicated-servers-bringyourownimage?id=kb_article_view&sysparm_article=KB0043278) feature.  
+Bring Your Own Linux is somewhat of an extension of the [Bring Your Own Image](https://help.ovhcloud.com/csm/en-dedicated-servers-bringyourownimage?id=kb_article_view&sysparm_article=KB0043281) feature.
 It enables you to install any Linux of you choice with additional features, like:
 
-- Custom partitioning [using the OVHcloud API](https://help.ovhcloud.com/csm/en-gb-dedicated-servers-api-partitioning?id=kb_article_view&sysparm_article=KB0043880), [software RAID](https://help.ovhcloud.com/csm/en-gb-dedicated-servers-raid-soft?id=kb_article_view&sysparm_article=KB0043932), LVM, ZFS, etc.
+- Custom partitioning [using the OVHcloud API](https://help.ovhcloud.com/csm/en-dedicated-servers-api-partitioning?id=kb_article_view&sysparm_article=KB0043882), [software RAID](https://help.ovhcloud.com/csm/en-dedicated-servers-raid-soft?id=kb_article_view&sysparm_article=KB0043935), LVM, ZFS, etc.
 - Custom `Cloud-init` meta-data
 
 <a name="reqs"></a>
@@ -52,7 +52,7 @@ You can use an already packaged Linux image made by your favorite distro:
 - [Fedora](https://alt.fedoraproject.org/en/cloud/)
 - whatever Linux you want
 
-> Be aware that some Linux distributions have virtualization-oriented kernels within their QCOW2 images.  
+> Be aware that some Linux distributions have virtualization-oriented kernels within their QCOW2 images.
 > When trying to boot these kernels on baremetal servers, there might be some problems.
 
 <a name="qemu"></a>
@@ -88,7 +88,7 @@ tmpfs           5.0M     0  5.0M   0% /run/lock
 tmpfs            46M     0   46M   0% /run/user/0
 ```
 
-As seen in the video, every modification done while in `qemu` will be saved.  
+As seen in the video, every modification done while in `qemu` will be saved.
 You can add scripts, files, packages, services.
 
 <a name="packer"></a>
@@ -107,7 +107,7 @@ _All the following process is done on a Debian 11 baremetal server as `root` use
     See example in this [file](example_build/mycustomdebian12.json)
 
 2. An `httpdir` directory containing:
-    - an empty `meta-data` file  
+    - an empty `meta-data` file
       or can be filled like this [one](example_build/httpdir/meta-data)
     - a `user-data` file that can either be a script, as follow:
 
@@ -159,49 +159,31 @@ Although we will not provide detailed procedures for these, the following method
 
 You can use a home-made script with the OVH lib, and use a payload like this one:
 
+`POST /dedicated/server/{serviceName}/reinstall`
+
 ```json
 {
-    "details": {
-        "customHostname": "myHostname"
+  "operatingSystem": "byolinux_64",
+  "customizations": {
+    "hostname": "myHostname",
+    "imageURL": "https://github.com/myself/myImagesFactory/releases/download/0.1/myCustomImage.qcow2",
+    "imageCheckSum": "6a65719e6a7f276a4b8685d3ace0920d56acef7d4bbbf9427fe188db7b19c23be7fc182f7a9b29e394167717731f4cd7cab410a36e60e6c6451954f3b795a15c",
+    "httpHeaders": {
+      "Authorization": "Basic dGhlb3dsc2FyZW5vdDp3aGF0dGhleXNlZW1z="
     },
-    "partitionSchemeName": "default",
-    "templateName": "byolinux_64",
-    "userMetadata": [
-        {
-            "key": "imageURL",
-            "value": "https://github.com/myself/myImagesFactory/releases/download/0.1/myCustomImage.qcow2"
-        },
-        {
-            "key": "httpHeaders0Key",
-            "value": "Authorization"
-        },
-        {
-            "key": "httpHeaders0Value",
-            "value": "Basic dGhlb3dsc2FyZW5vdDp3aGF0dGhleXNlZW1z="
-        },
-        {
-            "key": "imageCheckSum",
-            "value": "6a65719e6a7f276a4b8685d3ace0920d56acef7d4bbbf9427fe188db7b19c23be7fc182f7a9b29e394167717731f4cd7cab410a36e60e6c6451954f3b795a15c"
-        },
-        {
-            "key": "imageCheckSumType",
-            "value": "sha512"
-        },
-        {
-            "key": "configDriveUserData",
-            "value": "#!/bin/bash\necho \"Hi, sounds like BYOLinux as ostemplate is a success!\" >/etc/motd"
-        }
-    ]
+    "imageCheckSumType": "sha512",
+    "configDriveUserData": "#!/bin/bash\necho \"Hi, sounds like BYOLinux as ostemplate is a success!\" >/etc/motd"
+  }
 }
 ```
 
 The key elements here are:
 
-- `templateName`: which is `boylinux_64`
-- `userMetadata`: which holds all information to pass to the installer
-- `httpHeadersXKey` and `httpHeadersXvalue`: whose configure, if necessary the call to retrieve the customer image.  
+- `operatingSystem`: which is `boylinux_64`
+- `customizations`: which holds all information to pass to the installer
+- `customizations/httpHeaders`: which can be configured, if necessary the call to retrieve the customer image.
     In this example, we set a basic authentication
-- the other items in `userMetadata` seem quite self-explanatory
+- the other items in `customizations` seem quite self-explanatory
 
 #### From the OVH API Console
 
@@ -252,13 +234,13 @@ For more information and examples about Cloud-Init's ConfigDrive, please read th
 
 ### Partitioning the disks
 
-> For an in-depth presentation about partitioning at OVHcloud, see  
+> For an in-depth presentation about partitioning at OVHcloud, see
 > this awesome [talk](https://player.vimeo.com/video/804422420) by Jean-Baptiste Delon
 > and the official [documentation](https://help.ovhcloud.com/csm/fr-dedicated-servers-api-partitioning?id=kb_article_view&sysparm_article=KB0043888)
 
 With the provided partition scheme, the disks will be partitioned
-and formatted with the selected filesystem.  
-All partitions are mounted on their respecting mount points in `/tmp/a/`.  
+and formatted with the selected filesystem.
+All partitions are mounted on their respecting mount points in `/tmp/a/`.
 
 ```bash
 /tmp/a/home
@@ -276,21 +258,21 @@ Provided `cloud-init`'s meta-data files will be copied in a small vfat partition
 
 ### Download and burn the customer's image
 
-The provided image is downloaded in ram/disk[?], and mounted with `qemu-nbd` in `/dev/shm/image`.  
+The provided image is downloaded in ram/disk[?], and mounted with `qemu-nbd` in `/dev/shm/image`.
 All the content of the image is then `rsynced` to the disks
 
 <a name="mib"></a>
 
 ### `make_image_bootable.sh`
 
-`make_image_bootable.sh` have to be located in `/root/.ovh/` and be executable.  
+`make_image_bootable.sh` have to be located in `/root/.ovh/` and be executable.
 
-The script is executed once, right after the image is deployed on partitioned disk, and right before the first reboot into the new installation.  
+The script is executed once, right after the image is deployed on partitioned disk, and right before the first reboot into the new installation.
 
-The script can be used, for instance, to generate an adhoc initramfs, embedding drivers dedicated to the system the image will boot on. 
+The script can be used, for instance, to generate an adhoc initramfs, embedding drivers dedicated to the system the image will boot on.
 
 > There is no internet access at this moment, so if you try to install something not
-already in the image, it will fail. 
+already in the image, it will fail.
 
 See [`make_image_bootable.sh`](example_build/files/make_image_bootable.sh) example file.
 
