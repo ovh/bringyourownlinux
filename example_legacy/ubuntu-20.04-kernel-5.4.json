@@ -1,0 +1,78 @@
+{
+    "builders": [
+        {
+            "name": "10_generator",
+            "type": "file",
+            "content": "dummy",
+            "target": "dummy_file"
+        },
+        {
+            "name": "20_builder",
+            "type": "qemu",
+            "iso_url": "https://cloud-images.ubuntu.com/focal/current/focal-server-cloudimg-amd64.img",
+            "iso_checksum": "file:https://cloud-images.ubuntu.com/focal/current/SHA256SUMS",
+            "disk_image": true,
+            "disk_size": "3G",
+            "disk_compression": true,
+            "format": "qcow2",
+            "headless": "true",
+            "boot_wait": -1,
+            "communicator": "ssh",
+            "ssh_username": "devops",
+            "ssh_clear_authorized_keys": true,
+            "ssh_password": "riadvice",
+            "temporary_key_pair_type": "ed25519",
+            "shutdown_command": "echo 'riadvice' | sudo -S shutdown -P now",
+            "output_directory": "output",
+            "vm_name": "ubuntu2004.qcow2",
+            "qemuargs": [
+                [
+                    "-serial",
+                    "stdio"
+                ],
+                [
+                    "-m",
+                    "512"
+                ],
+                [
+                    "-cdrom",
+                    "cidata.iso"
+                ]
+            ]
+        }
+    ],
+    "provisioners": [
+        {
+            "type": "shell-local",
+            "inline_shebang": "/bin/bash -xe",
+            "inline": "cd httpdir && genisoimage -output ../cidata.iso -input-charset utf-8 -volid cidata -joliet -r user-data meta-data",
+            "only": [
+                "10_generator"
+            ]
+        },
+        {
+            "script": "scripts/pre-install-baremetal.sh",
+            "type": "shell",
+            "execute_command": "chmod +x {{ .Path }} && sudo {{ .Path }}",
+            "only": [
+                "20_builder"
+            ]
+        },
+        {
+            "only": [
+                "20_builder"
+            ],
+            "type": "file",
+            "source": "files/make_image_bootable.sh",
+            "destination": "/tmp/make_image_bootable.sh"
+        },
+        {
+            "only": [
+                "20_builder"
+            ],
+            "type": "shell",
+            "inline": "sudo -S mkdir /root/.ovh/ && sudo -S mv /tmp/make_image_bootable.sh /root/.ovh/ && sudo -S chmod -R +x /root/.ovh/",
+            "pause_before": "5s"
+        }
+    ]
+}
