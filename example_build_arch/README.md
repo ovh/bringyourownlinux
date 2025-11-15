@@ -241,13 +241,6 @@ sed -i 's/^HOOKS=.*/HOOKS=(base systemd ... your-hook ...)/' /etc/mkinitcpio.con
 - Machine-id is regenerated on first boot for uniqueness
 - The `packer` user remains in the image but has no SSH keys
 
-## Performance Expectations
-
-- **Build time**: 10-15 minutes (depending on internet speed and system)
-- **Image size**: ~1GB compressed
-- **Download during build**: ~300-500MB
-- **Deployment time**: 5-10 minutes on OVH server
-
 ## Known Issues
 
 - Missing firmware warnings during mkinitcpio are normal (GPU drivers, etc.)
@@ -261,15 +254,3 @@ sed -i 's/^HOOKS=.*/HOOKS=(base systemd ... your-hook ...)/' /etc/mkinitcpio.con
 - [Arch Linux mkinitcpio](https://wiki.archlinux.org/title/Mkinitcpio)
 - [Packer Documentation](https://www.packer.io/docs)
 - [mdadm on Arch Linux](https://wiki.archlinux.org/title/RAID)
-
-## Success Checklist
-
-After deployment, you should see:
-1. ✅ GRUB menu or automatic boot
-2. ✅ Kernel loading messages
-3. ✅ Initramfs loading (if RAID: mdadm assembling arrays)
-4. ✅ Systemd starting services
-5. ✅ Login prompt on console
-6. ✅ SSH accessible on port 22
-
-If any step fails, check the troubleshooting section above.
