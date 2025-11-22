@@ -66,7 +66,7 @@ source "qemu" "arch" {
   ssh_timeout               = "20m"
 
   # Before shutting down, truncate logs
-  shutdown_command = "sudo sh -c 'find /var/log/ -type f -exec truncate --size 0 {} + && poweroff'"
+  shutdown_command = "sudo sh -c 'find /var/log/ -type f -exec truncate --size 0 {} + && rm -f /etc/sudoers.d/90-cloud-init-users && userdel -fr packer && poweroff'"
 
   output_directory = "output"
   vm_name          = "arch-byol.qcow2"
