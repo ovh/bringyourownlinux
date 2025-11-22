@@ -46,9 +46,11 @@ source "qemu" "arch" {
   vm_name         = "arch-byol.qcow2"
 
   qemuargs = [
-    ["-serial", "stdio"],
-    ["-m", "1024"],
-    ["-cdrom", "cidata.iso"]
+    ["-m", "2048"],
+    ["-smp", "2"],
+    ["-cdrom", "cidata.iso"],
+    ["-netdev", "user,id=user.0,hostfwd=tcp::{{ .SSHHostPort }}-:22"],
+    ["-device", "virtio-net,netdev=user.0"]
   ]
 }
 
@@ -85,5 +87,29 @@ build {
       "sudo -S chmod -R +x /root/.ovh/"
     ]
     pause_before = "5s"
+  }
+
+  # Clean up packer user on first boot via systemd service
+  provisioner "shell" {
+    inline = [
+      "echo 'Creating cleanup service for packer user...'",
+      "sudo tee /etc/systemd/system/packer-cleanup.service > /dev/null <<'EOF'",
+      "[Unit]",
+      "Description=Remove packer user on first boot",
+      "After=cloud-init.service",
+      "ConditionPathExists=!/var/lib/packer-cleanup-done",
+      "",
+      "[Service]",
+      "Type=oneshot",
+      "ExecStart=/usr/bin/userdel -r packer",
+      "ExecStartPost=/usr/bin/touch /var/lib/packer-cleanup-done",
+      "RemainAfterExit=yes",
+      "",
+      "[Install]",
+      "WantedBy=multi-user.target",
+      "EOF",
+      "sudo systemctl enable packer-cleanup.service",
+      "echo 'Packer user will be removed on first boot'"
+    ]
   }
 }

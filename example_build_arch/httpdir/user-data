@@ -1,5 +1,4 @@
 #cloud-config
-ssh_pwauth: True
 users:
   - name: packer
     plain_text_passwd: packer
@@ -7,3 +6,12 @@ users:
     groups: wheel
     shell: /bin/bash
     lock_passwd: false
+
+# Ensure SSH is enabled and started
+runcmd:
+  - systemctl enable sshd
+  - systemctl start sshd
+
+# Network configuration
+bootcmd:
+  - dhclient || dhcpcd
