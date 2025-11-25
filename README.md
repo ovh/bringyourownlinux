@@ -153,11 +153,9 @@ Although we will not provide detailed procedures for these, the following method
 
 <a name="api"></a>
 
-### Via [OVHcloud API](https://api.ovh.com/console)
+### Via [OVHcloud API](https://eu.api.ovh.com/console/?section=%2Fdedicated%2Fserver&branch=v1#post-/dedicated/server/-serviceName-/reinstall)
 
-#### From CLI
-
-You can use a home-made script with the OVH lib, and use a payload like this one:
+You can use a home-made script, and use a payload like this one:
 
 `POST /dedicated/server/{serviceName}/reinstall`
 
@@ -185,13 +183,6 @@ The key elements here are:
     In this example, we set a basic authentication
 - the other items in `customizations` seem quite self-explanatory
 
-#### From the OVH API Console
-
-![api_console](files/api_install.png)
-
-As seen in the CLI section, it matches the JSON Payload, and you have
-only to fill the same items as in the previous example.
-
 <a name="manager"></a>
 
 ### Via the [OVHcloud Control Panel](https://www.ovh.com/manager/#/dedicated/configuration)
@@ -199,13 +190,9 @@ only to fill the same items as in the previous example.
 
 Log in to the [OVHcloud Control Panel](https://www.ovh.com/auth/?action=gotomanager&from=https://www.ovh.co.uk/&ovhSubsidiary=GB) and go to the `Bare Metal Cloud`{.action} section, then select your server under `Dedicated servers`{.action}.
 
-In the `General information`{.action} tab, click the `...`{.action} button next to "System (OS)" then click `Install`{.action}.
+In the `General information`{.action} tab, click the `...`{.action} button next to "System (OS)" then click `Install`{.action} (or `Reinstall`{.action}).
 
 ![BringYourOwnLinux Control Panel 01](files/byolinux-controlpanel01.png){.thumbnail}
-
-In the window that appears, select `Install from OVHcloud template`{.action} and click `Next`{.action}.
-
-![BringYourOwnLinux Control Panel 02](files/byolinux-controlpanel02.png){.thumbnail}
 
 In the window that appears, select `Custom` in the menu, then `Bring Your Own Linux - byolinux`, and click `Next`{.action}.
 
@@ -234,9 +221,7 @@ For more information and examples about Cloud-Init's ConfigDrive, please read th
 
 ### Partitioning the disks
 
-> For an in-depth presentation about partitioning at OVHcloud, see
-> this awesome [talk](https://player.vimeo.com/video/804422420) by Jean-Baptiste Delon
-> and the official [documentation](https://help.ovhcloud.com/csm/fr-dedicated-servers-api-partitioning?id=kb_article_view&sysparm_article=KB0043888)
+> For an in-depth presentation about partitioning at OVHcloud, see the official [documentation](https://help.ovhcloud.com/csm/fr-dedicated-servers-api-partitioning?id=kb_article_view&sysparm_article=KB0043888)
 
 With the provided partition scheme, the disks will be partitioned
 and formatted with the selected filesystem.
