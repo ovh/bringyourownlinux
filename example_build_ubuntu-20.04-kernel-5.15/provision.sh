@@ -61,7 +61,7 @@ echo "grub-efi-amd64 grub2/update_nvram boolean false" | debconf-set-selections
 # Disable some cloud-init options:
 # grub-dpkg sets an incorrect value to "grub-pc/install_devices" - PUBM-22667.
 # growpart and resizefs are not needed and can cause problems with ZFS partitions.
-sed -Ei '/^ - (grub-dpkg|growpart|resizefs)/d' /etc/cloud/cloud.cfg
+sed -Ei '/^  - (grub-dpkg|growpart|resizefs)/d' /etc/cloud/cloud.cfg
 
 # Remove hardcoded console-related parameters
 rm -f /etc/default/grub.d/50-cloudimg-settings.cfg
