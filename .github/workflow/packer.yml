@@ -4,25 +4,34 @@ on:  # yamllint disable-line rule:truthy
   push:
     tags: ['[0-9].[0-9]+*']
   workflow_dispatch:
+    inputs:
+      release_name:
+        type: string
+        required: false
 jobs:
   build:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
     permissions: write-all
     steps:
-      - uses: actions/checkout@v3
-      - name: Build with packer
+      - uses: actions/checkout@v4
+      - name: set up packer
         run: |
           sudo apt list -a packer
           sudo apt install -y --no-install-recommends packer \
              qemu-system-x86 qemu-utils guestfs-tools genisoimage
-          example_build/
+      - name: build archlinux with packer
+        run: |
+          cd example_build_archlinux/
           packer plugins install github.com/hashicorp/qemu
-          PACKER_LOG=1 packer build -parallel-builds=1 deb11k6.json
-          cd output; sha512sum deb11k6.qcow2 > SHA512SUMS
-      - name: GH Release
-        uses: softprops/action-gh-release@v0.1.15
-        if: startsWith(github.ref, 'refs/tags/')
+          PACKER_LOG=1 packer build -parallel-builds=1 archlinux.pkr.hcl
+          cd output; sha512sum archlinux.qcow2 > SHA512SUMS
+      - name: prepapre release files
+        run: |
+          mkdir outputs
+          mv example_build_archlinux/output/* outputs/
+      - name: create release
+        uses: softprops/action-gh-release@v2
+        if: ${{ startsWith(github.ref, 'refs/tags/') || inputs.release_name }}
         with:
-          files: |
-            example_build/output/deb11k6.qcow2
-            example_build/output/SHA512SUMS
+          name: ${{ inputs.release_name || github.ref_name }}
+          files: outputs/*
