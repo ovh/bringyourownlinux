@@ -51,7 +51,7 @@ apt-get -y autoremove
 apt-get -y purge '?config-files'
 apt-get -y clean
 
-# Download GRUB for legagy and UEFI servers, both can't be installed simultaneously - PUBM-22671.
+# Download GRUB for legacy and UEFI servers, both can't be installed simultaneously - PUBM-22671.
 apt-get -y install --download-only grub-efi-amd64
 apt-get -y install --download-only grub-pc
 

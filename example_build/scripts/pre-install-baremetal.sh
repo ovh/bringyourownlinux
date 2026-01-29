@@ -37,7 +37,7 @@ apt-get -y dist-upgrade
 apt-get -y autoremove
 apt-get -y clean
 
-# Download GRUB for legagy and UEFI servers, both can't be installed simultaneously.
+# Download GRUB for legacy and UEFI servers, both can't be installed simultaneously.
 apt-get -y install --no-install-recommends --download-only grub-efi-amd64
 apt-get -y install --no-install-recommends --download-only grub-pc
 # Make sure grub-efi-amd64 won't change the boot order.
