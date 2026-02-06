@@ -9,7 +9,7 @@
   - [Other methods](#othermethods)
 - [How to use it?](#useit)
   - [Via api.ovh.com](#api)
-  - [Via the OVH manager](#manager)
+  - [Via the OVHcloud Control Panel](#manager)
 - [How does it work?](#workit)
   - [Partitioning the disks](#partdisk)
   - [Create config-drive](#configdrive)
