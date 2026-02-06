@@ -22,7 +22,7 @@
 ## What is it?
 
 Bring Your Own Linux is somewhat of an extension of the [Bring Your Own Image](https://help.ovhcloud.com/csm/en-dedicated-servers-bringyourownimage?id=kb_article_view&sysparm_article=KB0043281) feature.
-It enables you to install any Linux of you choice with additional features, like:
+It enables you to install any Linux of your choice with additional features, like:
 
 - Custom partitioning [using the OVHcloud API](https://help.ovhcloud.com/csm/en-dedicated-servers-api-partitioning?id=kb_article_view&sysparm_article=KB0043882), [software RAID](https://help.ovhcloud.com/csm/en-dedicated-servers-raid-soft?id=kb_article_view&sysparm_article=KB0043935), LVM, ZFS, etc.
 - Custom `Cloud-init` meta-data
@@ -98,7 +98,7 @@ You can add scripts, files, packages, services.
 _All the following process is done on a Debian 11 baremetal server as `root` user_
 
 > Contrary to the previous method, you can add all you want in this one
-> as `packer` will automatically expend the disk.
+> as `packer` will automatically expand the disk.
 
 ![packer-cli-video](files/packer.mp4)
 
@@ -177,7 +177,7 @@ You can use a home-made script, and use a payload like this one:
 
 The key elements here are:
 
-- `operatingSystem`: which is `boylinux_64`
+- `operatingSystem`: which is `byolinux_64`
 - `customizations`: which holds all information to pass to the installer
 - `customizations/httpHeaders`: which can be configured, if necessary the call to retrieve the customer image.
     In this example, we set a basic authentication
@@ -198,7 +198,7 @@ In the window that appears, select `Custom` in the menu, then `Bring Your Own Li
 
 ![BringYourOwnLinux Control Panel 03](files/byolinux-controlpanel03.png){.thumbnail}
 
-You will be redirected to the configuration page. Make sure your image URL is in the correct format. Complete the rest of the required fields on this page. Once you have confirmed that the information is correct, click `Confirm`{.action}.
+You will be redirected to the configuration page. Make sure your image URL is in the correct format. Fill in the rest of the required fields on this page. Once you have confirmed that the information is correct, click `Confirm`{.action}.
 
 You can find more details on the options in the [deployment options](#options) section below.
 
@@ -225,7 +225,7 @@ For more information and examples about Cloud-Init's ConfigDrive, please read th
 
 With the provided partition scheme, the disks will be partitioned
 and formatted with the selected filesystem.
-All partitions are mounted on their respecting mount points in `/tmp/a/`.
+All partitions are mounted on their respective mount points in `/tmp/a/`.
 
 ```bash
 /tmp/a/home
@@ -250,7 +250,7 @@ All the content of the image is then `rsynced` to the disks
 
 ### `make_image_bootable.sh`
 
-`make_image_bootable.sh` have to be located in `/root/.ovh/` and be executable.
+`make_image_bootable.sh` has to be located in `/root/.ovh/` and be executable.
 
 The script is executed once, right after the image is deployed on partitioned disk, and right before the first reboot into the new installation.
 
