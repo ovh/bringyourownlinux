@@ -213,9 +213,8 @@ For more information and examples about Cloud-Init's ConfigDrive, please read th
 1. Partition the disks
 2. Create the `config-drive` partition
 3. Download and write the customer's image
-4. Set the boot order
-5. Run `make_image_bootable.sh`
-6. Reboot
+4. Run `make_image_bootable.sh`
+5. Reboot
 
 <a name="partdisk"></a>
 
