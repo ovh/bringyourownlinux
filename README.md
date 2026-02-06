@@ -104,7 +104,7 @@ _All the following process is done on a Debian 11 baremetal server as `root` use
 
 1. A `mydistrib.json` file is required to run packer
 
-    See example in this [file](example_build/mycustomdebian12.json)
+    See example in this [file](example_build/deb11k6.json)
 
 2. An `httpdir` directory containing:
     - an empty `meta-data` file
