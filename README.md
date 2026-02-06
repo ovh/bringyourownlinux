@@ -200,7 +200,7 @@ In the window that appears, select `Custom` in the menu, then `Bring Your Own Li
 
 You will be redirected to the configuration page. Make sure your image URL is in the correct format. Fill in the rest of the required fields on this page. Once you have confirmed that the information is correct, click `Confirm`{.action}.
 
-You can find more details on the options in the [deployment options](#options) section below.
+You can find more details on the options in the [How to use it?](#useit) section.
 
 For more information and examples about Cloud-Init's ConfigDrive, please read the official documentation on [this page](https://cloudinit.readthedocs.io/en/22.1_a/topics/examples.html).
 
