@@ -34,7 +34,7 @@ It enables you to install any Linux of you choice with additional features, like
 - Baremetal Server
 - Working qcow2 image
   - Only one partition
-  - The partition must be formatted with either `ext4` or `XFS`
+  - The partition must be formatted with `ext4`, `XFS`, or `BTRFS` (without subvolumes)
   - An executable `/root/.ovh/make_image_bootable.sh` script inside the partition
 
 <a name="howto"></a>
