@@ -2,7 +2,7 @@
 
 - [What is it?](#what)
 - [Requirements](#reqs)
-- [How to make a BYOL compatible image](#howto)
+- [How to make a BYOL-compatible image](#howto)
   - [From a QCOW2 file](#qcow2)
     - [With Qemu](#qemu)
     - [With Packer](#packer)
@@ -25,13 +25,13 @@ Bring Your Own Linux is somewhat of an extension of the [Bring Your Own Image](h
 It enables you to install any Linux of your choice with additional features, like:
 
 - Custom partitioning [using the OVHcloud API](https://help.ovhcloud.com/csm/en-dedicated-servers-api-partitioning?id=kb_article_view&sysparm_article=KB0043882), [software RAID](https://help.ovhcloud.com/csm/en-dedicated-servers-raid-soft?id=kb_article_view&sysparm_article=KB0043935), LVM, ZFS, etc.
-- Custom `Cloud-init` meta-data
+- Custom `cloud-init` meta-data
 
 <a name="reqs"></a>
 
 ## Requirements
 
-- Baremetal Server
+- A bare metal server
 - Working qcow2 image
   - Only one partition
   - The partition must be formatted with `ext4`, `XFS`, or `BTRFS` (without subvolumes)
@@ -53,7 +53,7 @@ You can use an already packaged Linux image made by your favorite distro:
 - whatever Linux you want
 
 > Be aware that some Linux distributions have virtualization-oriented kernels within their QCOW2 images.
-> When trying to boot these kernels on baremetal servers, there might be some problems.
+> When trying to boot these kernels on bare metal servers, there might be some problems.
 
 <a name="qemu"></a>
 
@@ -95,7 +95,7 @@ You can add scripts, files, packages, services.
 
 #### Example with Packer (using QEMU)
 
-_All the following process is done on a Debian 11 baremetal server as `root` user_
+_All the following process is done on a Debian 11 bare metal server as `root` user_
 
 > Contrary to the previous method, you can add all you want in this one
 > as `packer` will automatically expand the disk.
@@ -104,12 +104,12 @@ _All the following process is done on a Debian 11 baremetal server as `root` use
 
 1. A `mydistrib.json` file is required to run packer
 
-    See example in this [file](example_build/deb11k6.json)
+    For an example, see this [file](example_build/deb11k6.json)
 
 2. An `httpdir` directory containing:
     - an empty `meta-data` file
-      or can be filled like this [one](example_build/httpdir/meta-data)
-    - a `user-data` file that can either be a script, as follow:
+      or filled as in this [example](example_build/httpdir/meta-data)
+    - a `user-data` file that can be either a script, as follows:
 
         ```bash
         #!/bin/bash
@@ -122,7 +122,7 @@ _All the following process is done on a Debian 11 baremetal server as `root` use
         shutdown -Hr now
         ```
 
-      or a `cloud-init` script like this [one](example_build/httpdir/user-data)
+      or a `cloud-init` script like this [example](example_build/httpdir/user-data)
 
 3. Install `packer`, `qemu-system-x86`, `genisoimage`, and `qemu-utils`
 
@@ -155,7 +155,7 @@ Although we will not provide detailed procedures for these, the following method
 
 ### Via [OVHcloud API](https://eu.api.ovh.com/console/?section=%2Fdedicated%2Fserver&branch=v1#post-/dedicated/server/-serviceName-/reinstall)
 
-You can use a home-made script, and use a payload like this one:
+You can use a home-made script with a payload like this one:
 
 `POST /dedicated/server/{serviceName}/reinstall`
 
@@ -179,9 +179,9 @@ The key elements here are:
 
 - `operatingSystem`: which is `byolinux_64`
 - `customizations`: which holds all information to pass to the installer
-- `customizations/httpHeaders`: which can be configured, if necessary the call to retrieve the customer image.
-    In this example, we set a basic authentication
-- the other items in `customizations` seem quite self-explanatory
+- `customizations/httpHeaders`: which can be used to configure headers for retrieving the customer image, if necessary.
+    In this example, we use Basic authentication
+- The other items in `customizations` are self-explanatory
 
 <a name="manager"></a>
 
@@ -210,10 +210,10 @@ For more information and examples about Cloud-Init's ConfigDrive, please read th
 
 ## How does it work?
 
-1. Partitioning the disks
-2. Creating a `config-drive` partition
-3. Download and burn the customer's image
-4. Set boot order
+1. Partition the disks
+2. Create the `config-drive` partition
+3. Download and write the customer's image
+4. Set the boot order
 5. Run `make_image_bootable.sh`
 6. Reboot
 
@@ -221,7 +221,7 @@ For more information and examples about Cloud-Init's ConfigDrive, please read th
 
 ### Partitioning the disks
 
-> For an in-depth presentation about partitioning at OVHcloud, see the official [documentation](https://help.ovhcloud.com/csm/fr-dedicated-servers-api-partitioning?id=kb_article_view&sysparm_article=KB0043888)
+> For an in-depth presentation about partitioning at OVHcloud, see the official [documentation](https://help.ovhcloud.com/csm/en-dedicated-servers-api-partitioning?id=kb_article_view&sysparm_article=KB0043882)
 
 With the provided partition scheme, the disks will be partitioned
 and formatted with the selected filesystem.
@@ -237,14 +237,14 @@ All partitions are mounted on their respective mount points in `/tmp/a/`.
 
 ### Create `config-drive`
 
-Provided `cloud-init`'s meta-data files will be copied in a small vfat partition at the end of the disk.
+The provided `cloud-init` meta-data files will be copied to a small vfat partition at the end of the disk.
 
 <a name="burncustomer"></a>
 
 ### Download and burn the customer's image
 
-The provided image is downloaded in ram/disk[?], and mounted with `qemu-nbd` in `/dev/shm/image`.
-All the content of the image is then `rsynced` to the disks
+The provided image is downloaded into memory and mounted with `qemu-nbd` at `/dev/shm/image`.
+All the content of the image is then `rsynced` to the disks.
 
 <a name="mib"></a>
 
@@ -252,15 +252,15 @@ All the content of the image is then `rsynced` to the disks
 
 `make_image_bootable.sh` has to be located in `/root/.ovh/` and be executable.
 
-The script is executed once, right after the image is deployed on partitioned disk, and right before the first reboot into the new installation.
+The script is executed once, right after the image is deployed on the partitioned disk, and right before the first reboot into the new installation.
 
-The script can be used, for instance, to generate an adhoc initramfs, embedding drivers dedicated to the system the image will boot on.
+The script can be used, for instance, to generate an ad hoc initramfs, embedding drivers dedicated to the system the image will boot on.
 
 > The script runs chrooted into the deployed filesystem, not the rescue system itself. Internet
 > access may be available, but it is recommended to include all necessary packages in your image
 > rather than relying on network access during this step.
 
-See [`make_image_bootable.sh`](example_build/files/make_image_bootable.sh) example file.
+See the [`make_image_bootable.sh`](example_build/files/make_image_bootable.sh) example file.
 
 <a name="links"></a>
 
