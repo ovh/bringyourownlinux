@@ -265,5 +265,5 @@ See the [`make_image_bootable.sh`](example_build/files/make_image_bootable.sh) e
 
 ## Related links
 
-* [Contribute](https://github.com/ovh/BringYourOwnLinux/blob/master/CONTRIBUTING.md)
-* [Report bugs](https://github.com/ovh/BringYourOwnLinux/issues)
+* [Contribute](https://github.com/ovh/bringyourownlinux/blob/master/CONTRIBUTING.md)
+* [Report bugs](https://github.com/ovh/bringyourownlinux/issues)
