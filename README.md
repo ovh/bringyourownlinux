@@ -256,8 +256,9 @@ The script is executed once, right after the image is deployed on partitioned di
 
 The script can be used, for instance, to generate an adhoc initramfs, embedding drivers dedicated to the system the image will boot on.
 
-> There is no internet access at this moment, so if you try to install something not
-already in the image, it will fail.
+> The script runs chrooted into the deployed filesystem, not the rescue system itself. Internet
+> access may be available, but it is recommended to include all necessary packages in your image
+> rather than relying on network access during this step.
 
 See [`make_image_bootable.sh`](example_build/files/make_image_bootable.sh) example file.
 
