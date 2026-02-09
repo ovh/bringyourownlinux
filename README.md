@@ -188,23 +188,23 @@ The key elements here are:
 ### Via the [OVHcloud Control Panel](https://www.ovh.com/manager/#/dedicated/configuration)
 
 
-Log in to the [OVHcloud Control Panel](https://www.ovh.com/auth/?action=gotomanager&from=https://www.ovh.co.uk/&ovhSubsidiary=GB) and go to the `Bare Metal Cloud`{.action} section, then select your server under `Dedicated servers`{.action}.
+Log in to the [OVHcloud Control Panel](https://www.ovh.com/auth/?action=gotomanager&from=https://www.ovh.co.uk/&ovhSubsidiary=GB) and go to the `Bare Metal Cloud` section, then select your server under `Dedicated servers`.
 
-In the `General information`{.action} tab, click the `...`{.action} button next to "System (OS)" then click `Install`{.action} (or `Reinstall`{.action}).
+In the `General information` tab, click the `...` button next to "System (OS)" then click `Install` (or `Reinstall`).
 
-![BringYourOwnLinux Control Panel 01](files/byolinux-controlpanel01.png){.thumbnail}
+![BringYourOwnLinux Control Panel 01](files/byolinux-controlpanel01.png)
 
-In the window that appears, select `Custom` in the menu, then `Bring Your Own Linux - byolinux`, and click `Next`{.action}.
+In the window that appears, select `Custom` in the menu, then `Bring Your Own Linux - byolinux`, and click `Next`.
 
-![BringYourOwnLinux Control Panel 03](files/byolinux-controlpanel03.png){.thumbnail}
+![BringYourOwnLinux Control Panel 03](files/byolinux-controlpanel03.png)
 
-You will be redirected to the configuration page. Make sure your image URL is in the correct format. Fill in the rest of the required fields on this page. Once you have confirmed that the information is correct, click `Confirm`{.action}.
+You will be redirected to the configuration page. Make sure your image URL is in the correct format. Fill in the rest of the required fields on this page. Once you have confirmed that the information is correct, click `Confirm`.
 
 You can find more details on the options in the [How to use it?](#useit) section.
 
 For more information and examples about Cloud-Init's ConfigDrive, please read the official documentation on [this page](https://cloudinit.readthedocs.io/en/22.1_a/topics/examples.html).
 
-![BringYourOwnLinux Control Panel 04](files/byolinux-controlpanel04.png){.thumbnail}
+![BringYourOwnLinux Control Panel 04](files/byolinux-controlpanel04.png)
 
 <a name="workit"></a>
 
