@@ -266,3 +266,8 @@ See the [`make_image_bootable.sh`](example_build/files/make_image_bootable.sh) e
 ## Related links
 
 * [Report bugs](https://github.com/ovh/bringyourownlinux/issues)
+
+## Automated Builds
+
+All example images are built automatically on a weekly basis using GitHub Actions.
+See the [.github/workflows](.github/workflows) directory for details.

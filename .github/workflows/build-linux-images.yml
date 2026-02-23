@@ -1,0 +1,61 @@
+name: Build Linux Images
+
+on:
+  schedule:
+    # Run every Monday at 2 AM UTC (weekly)
+    - cron: '0 2 * * 1'
+  workflow_dispatch:
+
+jobs:
+  build-all-images:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+    
+    - name: Setup Packer
+      uses: hashicorp/setup-packer@v3
+    
+    - name: Setup QEMU
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y qemu-system-x86 qemu-utils
+    
+    - name: Build Alpine Linux Image
+      run: |
+        cd example_build_alpine
+        packer init .
+        packer build -force alpine.pkr.hcl
+    
+    - name: Build Arch Linux Image
+      run: |
+        cd example_build_archlinux
+        packer init .
+        packer build -force archlinux.pkr.hcl
+    
+    - name: Build Ubuntu Image
+      run: |
+        cd example_build_ubuntu-20.04-kernel-5.15
+        packer init .
+        packer build -force ubuntu-20.04-kernel-5.15.pkr.hcl
+    
+    - name: Upload Alpine Artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: alpine-image
+        path: example_build_alpine/output/*.qcow2
+        retention-days: 7
+    
+    - name: Upload Arch Linux Artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: archlinux-image
+        path: example_build_archlinux/output/*.qcow2
+        retention-days: 7
+    
+    - name: Upload Ubuntu Artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: ubuntu-image
+        path: example_build_ubuntu-20.04-kernel-5.15/output/*.qcow2
+        retention-days: 7
