@@ -163,16 +163,42 @@ You can use a home-made script with a payload like this one:
 {
   "operatingSystem": "byolinux_64",
   "customizations": {
-    "hostname": "myHostname",
+    "hostname": "mon-tux",
     "imageURL": "https://github.com/myself/myImagesFactory/releases/download/0.1/myCustomImage.qcow2",
     "imageCheckSum": "6a65719e6a7f276a4b8685d3ace0920d56acef7d4bbbf9427fe188db7b19c23be7fc182f7a9b29e394167717731f4cd7cab410a36e60e6c6451954f3b795a15c",
     "httpHeaders": {
       "Authorization": "Basic dGhlb3dsc2FyZW5vdDp3aGF0dGhleXNlZW1z="
     },
     "imageCheckSumType": "sha512",
-    "configDriveUserData": "#!/bin/bash\necho \"Hi, sounds like BYOLinux as ostemplate is a success!\" >/etc/motd"
+    "configDriveUserData": "I2Nsb3VkLWNvbmZpZwpzc2hfYXV0aG9yaXplZF9rZXlzOgogIC0gc3NoLWVkMjU1MTkgQUFBQUMzTnphQzFsWkRJMU5URTVBQUFBSUFiY0QgbXlzZWxmQG15ZG9tYWluLm5ldAoKdXNlcnM6CiAgLSBuYW1lOiBwYXRpZW50MAogICAgc3VkbzogQUxMPShBTEwpIE5PUEFTU1dEOkFMTAogICAgZ3JvdXBzOiB1c2Vycywgc3VkbwogICAgc2hlbGw6IC9iaW4vYmFzaAogICAgbG9ja19wYXNzd2Q6IGZhbHNlCiAgICBzc2hfYXV0aG9yaXplZF9rZXlzOgogICAgICAtIHNzaC1lZDI1NTE5IEFBQUFDM056YUMxbFpESTFOVEU1QUFBQUlBYmNEIG15c2VsZkBteWRvbWFpbi5uZXQKZGlzYWJsZV9yb290OiBmYWxzZQpwYWNrYWdlczoKICAtIHZpbQogIC0gdHJlZQpydW5jbWQ6CiAgLSBlY2hvICJjb3Vjb3UgcnVuY21kIiA+IC9vcHQvY291Y291CiAgLSBjYXQgL2V0Yy9tYWNoaW5lLWlkID4+IC9vcHQvY291Y291CiAgLSBkYXRlICIrJVktJW0tJWQgJUg6JU06JVMiIC0tdXRjID4+IC9vcHQvY291Y291CmZpbmFsX21lc3NhZ2U6IFRoZSBzeXN0ZW0gaXMgZmluYWxseSB1cCwgYWZ0ZXIgJFVQVElNRSBzZWNvbmRzCg=="
   }
 }
+```
+
+The `configDriveUserData` field above is base64-encoded. Here is the clear-text version:
+
+```yaml
+#cloud-config
+ssh_authorized_keys:
+  - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAbcD myself@mydomain.net
+
+users:
+  - name: patient0
+    sudo: ALL=(ALL) NOPASSWD:ALL
+    groups: users, sudo
+    shell: /bin/bash
+    lock_passwd: false
+    ssh_authorized_keys:
+      - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAbcD myself@mydomain.net
+disable_root: false
+packages:
+  - vim
+  - tree
+runcmd:
+  - echo "coucou runcmd" > /opt/coucou
+  - cat /etc/machine-id >> /opt/coucou
+  - date "+%Y-%m-%d %H:%M:%S" --utc >> /opt/coucou
+final_message: The system is finally up, after $UPTIME seconds
 ```
 
 The key elements here are:
@@ -182,6 +208,8 @@ The key elements here are:
 - `customizations/httpHeaders`: which can be used to configure headers for retrieving the customer image, if necessary.
     In this example, we use Basic authentication
 - The other items in `customizations` are self-explanatory
+
+> **Note:** Unlike standard OVHcloud OS templates (e.g. Debian 12, Windows Server), BYOLinux does not support the `postInstallationScript` customization option. To run commands or scripts after installation, use `configDriveUserData` with a cloud-init [`runcmd`](https://cloudinit.readthedocs.io/en/latest/reference/modules.html#runcmd) directive instead.
 
 <a name="manager"></a>
 
