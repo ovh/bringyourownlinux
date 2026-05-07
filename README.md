@@ -170,7 +170,11 @@ You can use a home-made script with a payload like this one:
       "Authorization": "Basic dGhlb3dsc2FyZW5vdDp3aGF0dGhleXNlZW1z="
     },
     "imageCheckSumType": "sha512",
-    "configDriveUserData": "I2Nsb3VkLWNvbmZpZwpzc2hfYXV0aG9yaXplZF9rZXlzOgogIC0gc3NoLWVkMjU1MTkgQUFBQUMzTnphQzFsWkRJMU5URTVBQUFBSUFiY0QgbXlzZWxmQG15ZG9tYWluLm5ldAoKdXNlcnM6CiAgLSBuYW1lOiBwYXRpZW50MAogICAgc3VkbzogQUxMPShBTEwpIE5PUEFTU1dEOkFMTAogICAgZ3JvdXBzOiB1c2Vycywgc3VkbwogICAgc2hlbGw6IC9iaW4vYmFzaAogICAgbG9ja19wYXNzd2Q6IGZhbHNlCiAgICBzc2hfYXV0aG9yaXplZF9rZXlzOgogICAgICAtIHNzaC1lZDI1NTE5IEFBQUFDM056YUMxbFpESTFOVEU1QUFBQUlBYmNEIG15c2VsZkBteWRvbWFpbi5uZXQKZGlzYWJsZV9yb290OiBmYWxzZQpwYWNrYWdlczoKICAtIHZpbQogIC0gdHJlZQpydW5jbWQ6CiAgLSBlY2hvICJjb3Vjb3UgcnVuY21kIiA+IC9vcHQvY291Y291CiAgLSBjYXQgL2V0Yy9tYWNoaW5lLWlkID4+IC9vcHQvY291Y291CiAgLSBkYXRlICIrJVktJW0tJWQgJUg6JU06JVMiIC0tdXRjID4+IC9vcHQvY291Y291CmZpbmFsX21lc3NhZ2U6IFRoZSBzeXN0ZW0gaXMgZmluYWxseSB1cCwgYWZ0ZXIgJFVQVElNRSBzZWNvbmRzCg=="
+    "configDriveUserData": "I2Nsb3VkLWNvbmZpZwpzc2hfYXV0aG9yaXplZF9rZXlzOgogIC0gc3NoLWVkMjU1MTkgQUFBQUMzTnphQzFsWkRJMU5URTVBQUFBSUFiY0QgbXlzZWxmQG15ZG9tYWluLm5ldAoKdXNlcnM6CiAgLSBuYW1lOiBwYXRpZW50MAogICAgc3VkbzogQUxMPShBTEwpIE5PUEFTU1dEOkFMTAogICAgZ3JvdXBzOiB1c2Vycywgc3VkbwogICAgc2hlbGw6IC9iaW4vYmFzaAogICAgbG9ja19wYXNzd2Q6IGZhbHNlCiAgICBzc2hfYXV0aG9yaXplZF9rZXlzOgogICAgICAtIHNzaC1lZDI1NTE5IEFBQUFDM056YUMxbFpESTFOVEU1QUFBQUlBYmNEIG15c2VsZkBteWRvbWFpbi5uZXQKZGlzYWJsZV9yb290OiBmYWxzZQpwYWNrYWdlczoKICAtIHZpbQogIC0gdHJlZQpydW5jbWQ6CiAgLSBlY2hvICJjb3Vjb3UgcnVuY21kIiA+IC9vcHQvY291Y291CiAgLSBjYXQgL2V0Yy9tYWNoaW5lLWlkID4+IC9vcHQvY291Y291CiAgLSBkYXRlICIrJVktJW0tJWQgJUg6JU06JVMiIC0tdXRjID4+IC9vcHQvY291Y291CmZpbmFsX21lc3NhZ2U6IFRoZSBzeXN0ZW0gaXMgZmluYWxseSB1cCwgYWZ0ZXIgJFVQVElNRSBzZWNvbmRzCg==",
+    "configDriveMetadata": {
+      "role": "webserver",
+      "env": "prod"
+    }
   }
 }
 ```
@@ -207,6 +211,7 @@ The key elements here are:
 - `customizations`: which holds all information to pass to the installer
 - `customizations/httpHeaders`: which can be used to configure headers for retrieving the customer image, if necessary.
     In this example, we use Basic authentication
+- `customizations/configDriveMetadata`: arbitrary key/value pairs written to the config drive's `meta_data.json` under the `meta` key. This is the equivalent of OpenStack's [`server create --property key=value`](https://docs.openstack.org/nova/latest/user/metadata.html#openstack-format-metadata); cloud-init exposes it to the running system at first boot.
 - The other items in `customizations` are self-explanatory
 
 > **Note:** Unlike standard OVHcloud OS templates (e.g. Debian 12, Windows Server), BYOLinux does not support the `postInstallationScript` customization option. To run commands or scripts after installation, use `configDriveUserData` with a cloud-init [`runcmd`](https://cloudinit.readthedocs.io/en/latest/reference/modules.html#runcmd) directive instead.
