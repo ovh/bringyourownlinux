@@ -25,7 +25,7 @@ Bring Your Own Linux is somewhat of an extension of the [Bring Your Own Image](h
 It enables you to install any Linux of your choice with additional features, like:
 
 - Custom partitioning [using the OVHcloud API](https://help.ovhcloud.com/csm/en-dedicated-servers-api-partitioning?id=kb_article_view&sysparm_article=KB0043882), [software RAID](https://help.ovhcloud.com/csm/en-dedicated-servers-raid-soft?id=kb_article_view&sysparm_article=KB0043935), LVM, ZFS, etc.
-- Custom `cloud-init` meta-data
+- Customizing the image at first boot via [`cloud-init`](https://cloud-init.io/): user-data, hostname, SSH keys, etc.
 
 <a name="reqs"></a>
 
@@ -36,6 +36,8 @@ It enables you to install any Linux of your choice with additional features, lik
   - Only one partition
   - The partition must be formatted with `ext4`, `XFS`, or `BTRFS` (without subvolumes)
   - An executable `/root/.ovh/make_image_bootable.sh` script inside the partition
+
+> To apply OVHcloud customizations at first boot, your image must include cloud-init or a compatible alternative (such as FreeBSD's [`nuageinit`](https://cgit.freebsd.org/src/tree/libexec/nuageinit/)).
 
 <a name="howto"></a>
 
@@ -211,6 +213,7 @@ The key elements here are:
 - `customizations`: which holds all information to pass to the installer
 - `customizations/httpHeaders`: which can be used to configure headers for retrieving the customer image, if necessary.
     In this example, we use Basic authentication
+- `customizations/configDriveUserData`: standard cloud-init [user-data](https://cloudinit.readthedocs.io/en/latest/explanation/format.html) — typically a `#cloud-config` document or a script (see the [official cloud-init examples](https://docs.cloud-init.io/en/latest/reference/examples.html)). Equivalent to OpenStack's `server create --user-data <file>`. Sent base64-encoded.
 - `customizations/configDriveMetadata`: arbitrary key/value pairs written to the config drive's `meta_data.json` under the `meta` key. This is the equivalent of OpenStack's [`server create --property key=value`](https://docs.openstack.org/nova/latest/user/metadata.html#openstack-format-metadata); cloud-init exposes it to the running system at first boot.
 - The other items in `customizations` are self-explanatory
 
@@ -234,8 +237,6 @@ In the window that appears, select `Custom` in the menu, then `Bring Your Own Li
 You will be redirected to the configuration page. Make sure your image URL is in the correct format. Fill in the rest of the required fields on this page. Once you have confirmed that the information is correct, click `Confirm`.
 
 You can find more details on the options in the [How to use it?](#useit) section.
-
-For more information and examples about Cloud-Init's ConfigDrive, please read the official documentation on [this page](https://cloudinit.readthedocs.io/en/22.1_a/topics/examples.html).
 
 ![BringYourOwnLinux Control Panel 04](files/byolinux-controlpanel04.png)
 
@@ -269,7 +270,7 @@ All partitions are mounted on their respective mount points in `/tmp/a/`.
 
 ### Create `config-drive`
 
-The provided `cloud-init` meta-data files will be copied to a small vfat partition at the end of the disk.
+A small vfat partition is created at the end of the disk and populated with the cloud-init [config drive](https://docs.cloud-init.io/en/latest/reference/datasources/configdrive.html).
 
 <a name="burncustomer"></a>
 
