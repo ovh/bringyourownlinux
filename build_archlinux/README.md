@@ -15,7 +15,7 @@ Install the required tools on your system, for instance on Debian or Ubuntu:
 ## Directory Structure
 
 ```none
-example_build_archlinux/
+build_archlinux/
 ├── archlinux.pkr.hcl # Packer configuration file
 ├── make_image_bootable.sh # Runs during installation
 └── provision.sh # Provisions the image for bare metal
