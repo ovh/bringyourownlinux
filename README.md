@@ -106,11 +106,11 @@ _All the following process is done on a Debian 11 bare metal server as `root` us
 
 1. A `mydistrib.json` file is required to run packer
 
-    For an example, see this [file](example_build/deb11k6.json)
+    For an example, see this [file](build_debian-11-kernel-6/deb11k6.json)
 
 2. An `httpdir` directory containing:
     - an empty `meta-data` file
-      or filled as in this [example](example_build/httpdir/meta-data)
+      or filled as in this [example](build_debian-11-kernel-6/httpdir/meta-data)
     - a `user-data` file that can be either a script, as follows:
 
         ```bash
@@ -124,7 +124,7 @@ _All the following process is done on a Debian 11 bare metal server as `root` us
         shutdown -Hr now
         ```
 
-      or a `cloud-init` script like this [example](example_build/httpdir/user-data)
+      or a `cloud-init` script like this [example](build_debian-11-kernel-6/httpdir/user-data)
 
 3. Install `packer`, `qemu-system-x86`, `genisoimage`, and `qemu-utils`
 
@@ -293,7 +293,7 @@ The script can be used, for instance, to generate an ad hoc initramfs, embedding
 > access may be available, but it is recommended to include all necessary packages in your image
 > rather than relying on network access during this step.
 
-See the [`make_image_bootable.sh`](example_build/files/make_image_bootable.sh) example file.
+See the [`make_image_bootable.sh`](build_debian-11-kernel-6/files/make_image_bootable.sh) example file.
 
 <a name="links"></a>
 
