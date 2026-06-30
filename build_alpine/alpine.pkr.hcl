@@ -44,7 +44,8 @@ source "qemu" "builder" {
   # Allows us to see the VM's console when PACKER_LOG=1 is set
   qemuargs                  = [["-serial", "stdio"]]
   # Before shutting down, truncate logs and remove everything linked to the provisioning user
-  shutdown_command          = "sudo sh -c 'find /var/log/ -type f -exec truncate --size 0 {} + && rm -f /etc/sudoers.d/90-cloud-init-users && deluser --remove-home packer && poweroff'"
+  # BusyBox tools: truncate uses -s (not --size); use ';' so poweroff always runs
+  shutdown_command          = "sudo sh -c 'find /var/log/ -type f -exec truncate -s 0 {} + ; rm -f /etc/sudoers.d/90-cloud-init-users ; deluser packer 2>/dev/null ; rm -rf /home/packer ; poweroff'"
   communicator              = "ssh"
   ssh_clear_authorized_keys = true
   ssh_username              = "packer"
