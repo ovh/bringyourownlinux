@@ -22,6 +22,14 @@ cp /usr/share/grub/default/grub /etc/default/grub
 # Add non-free-firmware for AMD and Intel microcodes
 sed -i "s/\bmain\b/& contrib non-free/" /etc/apt/sources.list
 
+# bullseye-backports was removed from the regular mirrors when Debian 11 left
+# regular support; it now lives only on archive.debian.org. Add it explicitly so
+# the backported kernel below can still be installed. The archive serves expired
+# Release files, so disable the Valid-Until check.
+echo "deb http://archive.debian.org/debian bullseye-backports main contrib non-free" \
+    > /etc/apt/sources.list.d/bullseye-backports.list
+echo 'Acquire::Check-Valid-Until "false";' > /etc/apt/apt.conf.d/99no-check-valid-until
+
 apt-get update
 
 # Install the backported kernel
