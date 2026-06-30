@@ -22,10 +22,21 @@ jobs:
             output: ubuntu-20.04-kernel-5.15.qcow2
     steps:
       - uses: actions/checkout@v4
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
+            | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
       - name: Install dependencies
         run: |
+          sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            packer qemu-system-x86 qemu-utils guestfs-tools genisoimage
+            qemu-system-x86 qemu-utils guestfs-tools genisoimage
+      - name: Install Packer
+        uses: hashicorp/setup-packer@main
+        with:
+          version: latest
       - name: Install Packer QEMU plugin
         working-directory: ${{ matrix.dir }}
         run: |
