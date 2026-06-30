@@ -15,6 +15,10 @@ source "qemu" "builder" {
     "/user-data" = <<-EOF
     #cloud-config
     ssh_pwauth: true
+    # The Alpine cloud image ships without sudo, but Packer runs the provisioners
+    # via sudo. cloud-init installs it on first boot, before provisioning.
+    packages:
+      - sudo
     users:
       - name: packer
         plain_text_passwd: packer
@@ -52,6 +56,13 @@ source "qemu" "builder" {
 
 build {
   sources = ["source.qemu.builder"]
+
+  # Wait for cloud-init to finish (so sudo from the user-data "packages" list is
+  # installed) before any sudo-based provisioner runs. This step runs as the
+  # packer user without sudo.
+  provisioner "shell" {
+    inline = ["cloud-init status --wait || true"]
+  }
 
   provisioner "shell" {
     execute_command = "chmod +x {{ .Path }} && sudo {{ .Path }}"

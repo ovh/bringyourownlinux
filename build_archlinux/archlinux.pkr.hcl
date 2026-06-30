@@ -26,8 +26,9 @@ source "qemu" "builder" {
   disk_compression          = true
   # The source is a disk image, not an ISO file
   disk_image                = true
-  # Same size as the source image
-  disk_size                 = "2G"
+  # The source image is ~2G; grow it so the system upgrade plus the firmware and
+  # microcode packages installed by provision.sh do not fill the disk (ENOSPC).
+  disk_size                 = "4G"
   format                    = "qcow2"
   # Do not launch QEMU's GUI
   headless                  = true
