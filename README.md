@@ -297,6 +297,14 @@ See the [`make_image_bootable.sh`](build_debian-11-kernel-6/files/make_image_boo
 
 <a name="links"></a>
 
+## Automated builds
+
+The example images in the `build_*` directories (Alpine, Debian 11, Arch, Ubuntu
+20.04) are built with Packer and published as GitHub Release assets by the
+[`Builder`](.github/workflows/packer.yml) workflow when a version tag (e.g. `1.0`)
+is pushed. Each release contains the `*.qcow2` image and its `*.sha512` checksum,
+ready to be referenced from the `imageURL` / `imageCheckSum` fields described above.
+
 ## Related links
 
 * [Report bugs](https://github.com/ovh/bringyourownlinux/issues)
