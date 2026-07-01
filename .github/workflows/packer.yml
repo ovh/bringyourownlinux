@@ -2,7 +2,9 @@
 name: Builder
 on:  # yamllint disable-line rule:truthy
   push:
-    tags: ['[0-9].[0-9]+*']
+    tags:
+      - '[0-9]+.[0-9]+*'     # 1.0, 10.2.3, ...
+      - 'v[0-9]+.[0-9]+*'    # v0.1.0, v1.2, ...
   workflow_dispatch:
 jobs:
   build:
