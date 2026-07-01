@@ -8,16 +8,16 @@ packer {
 }
 
 source "qemu" "baremetal" {
-  # Ubuntu 20.04 (focal) cloud image. The 5.15 HWE kernel is installed by
-  # provision.sh.
-  iso_url      = "https://cloud-images.ubuntu.com/focal/current/focal-server-cloudimg-amd64.img"
-  iso_checksum = "file:https://cloud-images.ubuntu.com/focal/current/SHA256SUMS"
+  # Debian 12 (bookworm) generic cloud image. The backported kernel is installed
+  # by provision.sh.
+  iso_url      = "https://cdimage.debian.org/cdimage/cloud/bookworm/latest/debian-12-generic-amd64.qcow2"
+  iso_checksum = "file:https://cdimage.debian.org/cdimage/cloud/bookworm/latest/SHA512SUMS"
   disk_image   = true
-  # Room for the HWE kernel plus the cached GRUB packages.
-  disk_size = "6G"
+  # Room for the newer kernel plus the cached ZFS/GRUB packages.
+  disk_size = "5G"
 
   format           = "qcow2"
-  vm_name          = "ubuntu-20.04-kernel-5.15.qcow2"
+  vm_name          = "debian-12.qcow2"
   output_directory = "output"
   disk_compression = true
 
@@ -59,13 +59,13 @@ build {
   sources = ["source.qemu.baremetal"]
 
   provisioner "file" {
-    source      = "make_image_bootable.sh"
+    source      = "files/make_image_bootable.sh"
     destination = "/tmp/make_image_bootable.sh"
   }
 
   provisioner "shell" {
     execute_command  = "chmod +x {{ .Path }} && sudo {{ .Path }}"
-    script           = "provision.sh"
+    script           = "scripts/pre-install-baremetal.sh"
     environment_vars = ["DEBIAN_FRONTEND=noninteractive"]
   }
 }

@@ -1,91 +1,283 @@
 #!/bin/bash
-
-set -eo pipefail
+set -euo pipefail
 
 export DEBIAN_FRONTEND=noninteractive
-# For the sort calls to behave consistently with paths like these - PUBM-23086:
-# /dev/disk/by-id/nvme-eui.e8238fa6bf530001001b44455555555-part1
-# /dev/disk/by-id/nvme-WDC_CL_SN720_SDAQNTW-512G-2000_xxxx-part1
-export LC_COLLATE=C.UTF-8
 
-# This script will run inside the newly installed system, no need to call chroot
+### Step 1: Console configuration ###
 
 configure_console() {
-    echo "Getting console parameters from the cmdline"
-    # Get the right console parameters (including SOL if available) from the
-    # rescue's cmdline - PUBM-16534
-    console_parameters="$(grep -Po '\bconsole=\S+' /proc/cmdline | paste -s -d" ")"
-    if ! grep '^GRUB_CMDLINE_LINUX="' /etc/default/grub | grep -qF "$console_parameters"; then
-        sed -Ei "s/(^GRUB_CMDLINE_LINUX=.*)\"\$/\1 $console_parameters\"/" /etc/default/grub
-    fi
+    local cmdline
+    cmdline=$(cat /proc/cmdline)
 
-    # Also pass these parameters to GRUB
-    parameters=$(sed -nE "s/.*\bconsole=ttyS([0-9]),([0-9]+)([noe])([0-9]+)\b.*/\1 \2 \3 \4/p" /proc/cmdline)
-    if [[ ! "$parameters" ]]; then
-        # No SOL, nothing to do
-        return
-    fi
-    read -r unit speed parity bits <<< "$parameters"
-    declare -A parities=([o]=odd [e]=even [n]=no)
-    parity="${parities["$parity"]}"
-    serial_command="serial --unit=$unit --speed=$speed --parity=$parity --word=$bits"
+    # Extract all console= parameters
+    local console_params
+    console_params=$(echo "$cmdline" | grep -oP 'console=\S+' || true)
 
-    if grep -qFx 'GRUB_TERMINAL="console serial"' /etc/default/grub; then
-        # Configuration already applied
+    if [ -z "$console_params" ]; then
         return
     fi
 
-    sed -i \
-        -e "/^# Uncomment to disable graphical terminal/d" \
-        -e "s/^#GRUB_TERMINAL=.*/GRUB_TERMINAL=\"console serial\"\nGRUB_SERIAL_COMMAND=\"$serial_command\"/" \
-        /etc/default/grub
+    # Read current GRUB_CMDLINE_LINUX value (without quotes)
+    local current
+    current=$(sed -n 's/^GRUB_CMDLINE_LINUX="\(.*\)"/\1/p' /etc/default/grub)
+
+    # Append each console= param if not already present
+    for param in $console_params; do
+        if ! echo " $current " | grep -qF " $param "; then
+            current="$current $param"
+        fi
+    done
+    current=$(echo "$current" | sed 's/^ *//')
+
+    sed -i "s|^GRUB_CMDLINE_LINUX=.*|GRUB_CMDLINE_LINUX=\"$current\"|" /etc/default/grub
+
+    # Check for serial console (ttyS*)
+    local serial_param
+    serial_param=$(echo "$console_params" | grep 'ttyS' | tail -1 || true)
+
+    # No serial console: nothing more to configure.
+    if [[ -z "$serial_param" ]]; then
+        return
+    fi
+
+    # Parse console=ttyS<unit>,<speed><parity><word> (e.g. ttyS0,115200n8)
+    local tty_part settings_part unit speed parity_char parity word
+    tty_part=$(echo "$serial_param" | sed 's/console=//' | cut -d, -f1)
+    settings_part=$(echo "$serial_param" | sed 's/console=//' | cut -d, -f2)
+
+    unit=$(echo "$tty_part" | sed 's/ttyS//')
+    speed=$(echo "$settings_part" | grep -oP '^\d+')
+    parity_char=$(echo "$settings_part" | grep -oP '\d+\K[noe]')
+    word=$(echo "$settings_part" | grep -oP '[noe]\K\d')
+
+    case "$parity_char" in
+        n) parity="no" ;;
+        o) parity="odd" ;;
+        e) parity="even" ;;
+    esac
+
+    # Set GRUB_TERMINAL (replace if exists, append if not)
+    if grep -q '^GRUB_TERMINAL=' /etc/default/grub; then
+        sed -i 's|^GRUB_TERMINAL=.*|GRUB_TERMINAL="console serial"|' /etc/default/grub
+    else
+        echo 'GRUB_TERMINAL="console serial"' >> /etc/default/grub
+    fi
+
+    # Set GRUB_SERIAL_COMMAND (replace if exists, append if not)
+    local serial_cmd="serial --unit=$unit --speed=$speed --parity=$parity --word=$word"
+    if grep -q '^GRUB_SERIAL_COMMAND=' /etc/default/grub; then
+        sed -i "s|^GRUB_SERIAL_COMMAND=.*|GRUB_SERIAL_COMMAND=\"$serial_cmd\"|" /etc/default/grub
+    else
+        echo "GRUB_SERIAL_COMMAND=\"$serial_cmd\"" >> /etc/default/grub
+    fi
 }
 
-# The image contains /etc/mdadm/mdadm.conf which was created by mdadm's postinst script.
-# It takes precedence over /etc/mdadm.conf which is generated during partitioning_apply.
-# This means /etc/mdadm.conf will never be read so we can delete it.
-rm -f /etc/mdadm.conf
-# In order to create a prettier config file, we regenerate /etc/mdadm/mdadm.conf
-# with a command similar to that of mdadm's postinst script.
-/usr/share/mdadm/mkconf force-generate
-# To update mdadm.conf inside the initramfs (it will be the same as /etc/mdadm/mdadm.conf)
-update-initramfs -u
+### Step 2: ZFS setup ###
 
+configure_zfs() {
+    if ! lsblk -lno FSTYPE | grep -qi zfs_member; then
+        echo "    No ZFS partitions detected, skipping."
+        return
+    fi
+    echo "    ZFS partitions detected, configuring..."
+
+    # grub-mkconfig (run by the grub postinst in install_grub, and on later
+    # kernel updates) mounts ZFS datasets via Ubuntu's 10_linux_zfs, which
+    # does not discard mount's stdout. On util-linux < 2.42, when
+    # /run/systemd/systemd-units-load is older than the freshly written
+    # /etc/fstab, mount prints a "your fstab has been modified" hint on stdout
+    # that 10_linux_zfs captures into a path it passes to find — yielding an
+    # empty kernel list and an unbootable ZFS root. Touch the marker newer
+    # than fstab to suppress the hint. Ubuntu-specific (Debian has its own
+    # grub zfs scripts). Remove once the target's util-linux carries the fix
+    # (>= 2.42, util-linux #3558). PUBM-45260, LP#2110050.
+    touch /run/systemd/systemd-units-load
+
+    # Create ZFS list cache so zfs-mount-generator generates one systemd
+    # mount unit per dataset. Without this, /boot/efi can be masked by a
+    # ZFS /boot mount. See PUBM-45416.
+    mkdir -p /etc/zfs/zfs-list.cache
+
+    local pool altroot
+    for pool in $(zpool list -Ho name); do
+        altroot=$(zpool get -Ho value altroot "$pool")
+
+        # Properties taken from zed history_event-zfs-list-cacher.sh
+        # https://github.com/openzfs/zfs/blob/zfs-2.3.2/cmd/zed/zed.d/history_event-zfs-list-cacher.sh.in#L69-L76
+        local PROPS="name,mountpoint,canmount,atime,relatime,devices,exec\
+,readonly,setuid,nbmand,encroot,keylocation\
+,org.openzfs.systemd:requires,org.openzfs.systemd:requires-mounts-for\
+,org.openzfs.systemd:before,org.openzfs.systemd:after\
+,org.openzfs.systemd:wanted-by,org.openzfs.systemd:required-by\
+,org.openzfs.systemd:nofail,org.openzfs.systemd:ignore"
+
+        zfs list -Ho "$PROPS" -r "$pool" > "/etc/zfs/zfs-list.cache/$pool"
+
+        if [ "$altroot" != "-" ]; then
+            # zfs list -H outputs tab-separated fields; tabs must be preserved
+            # or zfs-mount-generator fails with "not enough tokens"
+            awk -v ar="$altroot" 'BEGIN{FS=OFS="\t"} {
+                sub("^"ar, "", $2)
+                sub("^$", "/", $2)
+                print
+            }' "/etc/zfs/zfs-list.cache/$pool" > "/etc/zfs/zfs-list.cache/$pool.tmp"
+            mv "/etc/zfs/zfs-list.cache/$pool.tmp" "/etc/zfs/zfs-list.cache/$pool"
+        fi
+    done
+}
+
+### Step 3: mdadm configuration ###
+
+configure_mdadm() {
+    # /etc/mdadm.conf is generated during partitioning, but
+    # /etc/mdadm/mdadm.conf takes precedence and is the canonical location.
+    # Remove the stale one so it's never accidentally read.
+    rm -f /etc/mdadm.conf
+    # mkconf is Debian's mdadm helper that scans running arrays and writes
+    # a valid /etc/mdadm/mdadm.conf — force-generate rm's and rewrites the file
+    # itself (internal `exec >$CONFIG`), so no output redirect is needed.
+    /usr/share/mdadm/mkconf force-generate
+}
+
+### Step 4: GRUB installation ###
+
+# Map a block device to its first /dev/disk/by-id/ link.
+# Sort with LC_COLLATE=C.UTF-8 for locale-independent ordering, matching how
+# grub's postinst stores install_devices — another link would keep the device
+# from matching on later dpkg-reconfigure. See PUBM-23086.
+by_id_of() {
+    local dev_real
+    dev_real=$(readlink -f "$1")
+    LC_COLLATE=C.UTF-8 ls -1 /dev/disk/by-id/ 2>/dev/null | sort | while read -r link; do
+        if [ "$(readlink -f "/dev/disk/by-id/$link")" = "$dev_real" ]; then
+            echo "/dev/disk/by-id/$link"
+            break
+        fi
+    done
+}
+
+# Join arguments with ", " for debconf multiselect values — manually, because
+# the separator is two characters and IFS-based joins use only its first one.
+join_debconf() {
+    local result
+    result=$(printf '%s, ' "$@")
+    echo "${result%', '}"
+}
+
+# Find boot disk(s) for GRUB legacy installation:
+# 1. Find device(s) backing /boot (or / if /boot is not a separate mount)
+# 2. If /boot is on ZFS, resolve to the pool's underlying devices
+# 3. If /boot is on mdadm RAID, resolve to the RAID's member block devices
+# 4. Walk each device up to its parent disk
+# 5. Map each disk to its first /dev/disk/by-id/ link
+get_boot_disks() {
+    local boot_source
+    boot_source=$(findmnt -n -o SOURCE /boot 2>/dev/null || findmnt -n -o SOURCE /)
+
+    local devices=()
+
+    # Check if boot source is a ZFS dataset
+    local maybe_pool
+    maybe_pool=$(echo "$boot_source" | cut -d/ -f1)
+    if zpool list "$maybe_pool" &>/dev/null; then
+        # ZFS: resolve the pool to its real /dev partition paths.
+        # -L resolves symlinked vdev names, -P prints full paths; without
+        # them, leaf vdevs print as bare names (sda3, wwn-...) and the /dev/
+        # filter below would match nothing, yielding no install devices.
+        while IFS= read -r dev; do
+            devices+=("$dev")
+        done < <(zpool status -LP "$maybe_pool" | awk '/ONLINE/ {print $1}' | grep '^/dev/')
+    else
+        devices+=("$boot_source")
+    fi
+
+    # Walk each device up its dependency chain — lsblk -s lists the device
+    # itself, then what it sits on (md members, then their disks) — and keep
+    # the whole disks, deduplicated. grub-install cannot write to an md
+    # device (diskfilter writes are not supported), so md sources resolve to
+    # their member disks here.
+    local disk by_id_link disks=()
+    while IFS= read -r disk; do
+        by_id_link=$(by_id_of "$disk")
+        disks+=("${by_id_link:-$disk}")
+    done < <(lsblk -snpl -o TYPE,NAME "${devices[@]}" | awk '$1 == "disk" && !seen[$2]++ {print $2}')
+
+    join_debconf "${disks[@]}"
+}
+
+install_grub() {
+    if [ -d /sys/firmware/efi ]; then
+        echo "    UEFI boot detected."
+
+        # Find every ESP by its EFI_SYSPART label: plain partitions or md
+        # raid1 — the OVHcloud partitioner mirrors the ESP as RAID1 with metadata
+        # 0.90 (superblock at the end), so firmware reads each member as a
+        # plain FAT partition while the OS writes through the md device.
+        local esp_devices=()
+        local esp by_id_link
+        for esp in $(lsblk -pnlo NAME,LABEL,TYPE | awk '($3 == "part" || $3 == "raid1") && $2 == "EFI_SYSPART" { print $1 }'); do
+            by_id_link=$(by_id_of "$esp")
+            esp_devices+=("${by_id_link:-$esp}")
+        done
+        if [ "${#esp_devices[@]}" -gt 0 ]; then
+            echo "grub-efi-amd64 grub-efi/install_devices multiselect $(join_debconf "${esp_devices[@]}")" | debconf-set-selections
+        fi
+
+        # The fresh install's postinst runs grub-multi-install over the
+        # preseeded install_devices (every ESP), with --no-nvram via the
+        # grub2/update_nvram=false debconf baked into the image.
+        apt-get install --no-install-recommends -y grub-efi-amd64
+        apt-get purge -y grub-pc-bin
+    else
+        echo "    Legacy BIOS boot detected."
+        local boot_disks
+        boot_disks=$(get_boot_disks)
+        echo "grub-pc grub-pc/install_devices multiselect $boot_disks" | debconf-set-selections
+        # The fresh install's postinst runs grub-install on the preseeded
+        # install_devices, writing the MBR boot code on each disk.
+        apt-get install --no-install-recommends -y grub-pc
+        apt-get purge -y grub-efi-amd64-bin
+    fi
+
+    # Post-GRUB cleanup: autoremove but keep cache for customers
+    apt-get autoremove -y
+}
+
+### Step 5: System finalization ###
+
+finalize() {
+    systemd-machine-id-setup
+    # The ZFS userland is installed in the image, so /etc/hostid is baked at
+    # build time and shared by every server deployed from the image. A shared
+    # hostid defeats ZFS's guard against importing a pool still in use on
+    # another system, so overwrite it here with a fresh one. -f forces the
+    # rewrite; run unconditionally (a non-ZFS server may gain a pool later)
+    # and before update-initramfs so the initramfs embeds the new hostid.
+    # https://openzfs.github.io/openzfs-docs/msg/ZFS-8000-EY/index.html#zfs-label-hostid-mismatch
+    zgenhostid -f
+    # grub.cfg is generated by the grub package postinst in install_grub; no
+    # explicit update-grub needed here.
+    update-initramfs -u
+    rm -rf /root/.ovh
+}
+
+### Main ###
+
+exec > >(tee -a /var/log/ovh-make-bootable.log) 2>&1
+
+echo ">>> Configuring console..."
 configure_console
 
-realBootDevicesById=()
-if [ -d /sys/firmware/efi ]; then
-    echo "INFO - GRUB will be configured for UEFI boot"
-    # Find all EFI system partitions
-    for realBootDevice in $(lsblk -pnlo NAME,LABEL,TYPE | awk '$3 == "part" && $2 == "EFI_SYSPART" { print $1 }'); do
-        # See the legacy boot section below for details about the sort and head logic.
-        # https://git.launchpad.net/~ubuntu-core-dev/grub/+git/ubuntu/tree/debian/grub-multi-install?h=debian/2.06-2ubuntu7#n220
-        realBootDevicesById+=($(find -L /dev/disk/by-id/ -type b -samefile "$realBootDevice" | sort -us | head -n1))
-    done
-    echo "grub-efi-amd64 grub-efi/install_devices multiselect $(sed 's/ /, /g' <<< "${realBootDevicesById[@]}")" | debconf-set-selections
-    apt-get -y install grub-efi-amd64
-    apt-get -y purge grub-pc-bin
-else
-    echo "INFO - GRUB will be configured for legacy boot"
-    bootDevice="$(findmnt -A -c -e -l -n -T /boot/ -o SOURCE)"
-    realBootDevices="$(lsblk -n -p -b -l -o TYPE,NAME $bootDevice -s | awk '$1 == "disk" && !seen[$2]++ {print $2}')"
-    # realBootDevices are disks at this point
-    for realBootDevice in $realBootDevices; do
-        # When GRUB is manually installed, grub-pc/install_devices contains values from /dev/disk/by-id.
-        # Each device has two links in that folder, e.g. ata-HGST_HUS726040ALA610_KXXXX and wwn-0x5000cca25defa844.
-        # The postinst script for grub-pc keeps the first link after sorting them, see
-        # https://salsa.debian.org/grub-team/grub/-/blob/debian/2.04-20/debian/postinst.in#L89
-        # Using another link would cause it not to show up in the prompt to reconfigure the package.
-        realBootDevicesById+=($(find -L /dev/disk/by-id/ -type b -samefile "$realBootDevice" | sort -us | head -n1))
-    done
-    echo "grub-pc grub-pc/install_devices multiselect $(sed 's/ /, /g' <<< "${realBootDevicesById[@]}")" | debconf-set-selections
-    apt-get -y install grub-pc
-    apt-get -y purge grub-efi-amd64-bin
-fi
-apt-get -y autoremove
+echo ">>> Setting up ZFS..."
+configure_zfs
 
-# Generate a new unique machine-id for this server
-systemd-machine-id-setup
+echo ">>> Configuring mdadm..."
+configure_mdadm
 
-# suicide cleanup
-rm -fr /root/.ovh/
+echo ">>> Installing GRUB..."
+install_grub
+
+echo ">>> Finalizing system..."
+finalize
+
+echo ">>> make_image_bootable.sh complete."

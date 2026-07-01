@@ -1,83 +1,148 @@
 #!/bin/bash
-
 set -euo pipefail
 
 export DEBIAN_FRONTEND=noninteractive
 
-# Remove "PasswordAuthentication yes" that cloud-init enabled because of "ssh_pwauth: true"
-rm -f /etc/ssh/sshd_config.d/50-cloud-init.conf
+# cloud-init writes the apt sources during its configure stage; apt commands
+# racing it fail randomly with missing packages (PUBM-16450). Exit code 2 is a
+# recoverable warning and is tolerated.
+cloud_init_status=0
+cloud-init status --wait || cloud_init_status=$?
+if [ "$cloud_init_status" != 0 ] && [ "$cloud_init_status" != 2 ]; then
+    echo "cloud-init status exited with invalid code $cloud_init_status" >&2
+    exit 1
+fi
 
-# sources.list is created by cloud-init during the configure stage (apt-configure),
-# after SSH configuration (ssh), which is done during the init stage.
-# Therefore we need to wait for cloud-init to finish before running apt commands.
-# Failure to do so will cause apt to randomly fail because of missing packages - PUBM-16450.
-cloud-init status --wait
+# Place the post-install script that the deployer runs, chrooted, on the target.
+mkdir -p /root/.ovh
+mv /tmp/make_image_bootable.sh /root/.ovh/make_image_bootable.sh
+chmod +x /root/.ovh/make_image_bootable.sh
 
-# Install packages and updates
-apt-get -y update
-apt-get -y dist-upgrade
+# Remove a cloud-init module from cloud.cfg, failing loudly if it is missing so
+# an upstream rename is caught at build time rather than silently ignored.
+disable_cloud_init_module() {
+    local module="$1"
+    grep -qE "^ *- $module\$" /etc/cloud/cloud.cfg \
+        || { echo "ERROR: cloud-init module '$module' not found in cloud.cfg" >&2; exit 1; }
+    sed -i -E "/^ *- $module\$/d" /etc/cloud/cloud.cfg
+}
 
-# P8H77-M and D425KT boards have NICs which require the r8169 module - PUBM-16807 + PUBM-17155
-# On Ubuntu, this module is included in a separate linux-modules-extra package
-# The only way to pull linux-modules-extra and keep it up-to-date is to rely on this metapackage
-# Don't install recommends to skip "thermald" which pulls more dependencies
+### Phase 1: GRUB preparation ###
 
-# First, remove the existing kernels
-apt-get purge -y "linux-image-*"
-# Then, install the HWE one
-apt-get install -y --no-install-recommends linux-generic-hwe-20.04
-
-# Purge grub-pc now to make sure that it doesn't stay in a "rc" state on UEFI servers.
-# Remove grub-efi-amd64-signed because its postinst script doesn't honour grub2/update_nvram.
-# Upstream bug report about that: https://bugs.launchpad.net/ubuntu/+source/grub2/+bug/1969845
-# Same problem with shim-signed
-# Remove the linux-image-virtual kernel because we installed the generic one
-apt-get -y purge grub-efi-amd64-signed grub-pc linux-image-virtual shim-signed --allow-remove-essential
-
-# Create a default GRUB config file based on the default because purging grub-pc
-# removed the existing one, this needs to be done before autoremove removes grub2-common.
-cat << 'EOF' > /etc/default/grub
-# This file is based on /usr/share/grub/default/grub, some settings
-# have been changed by OVHcloud.
-
-EOF
-sed -E \
-  -e 's|^GRUB_CMDLINE_LINUX=.*|GRUB_CMDLINE_LINUX="nomodeset iommu=pt"|g' \
-  -e 's|^GRUB_CMDLINE_LINUX_DEFAULT=.*|GRUB_CMDLINE_LINUX_DEFAULT=""|' \
-  /usr/share/grub/default/grub >> /etc/default/grub
-
-apt-get -y autoremove
-# Purge all packages left in "rc" state - see "man apt-patterns".
-apt-get -y purge '?config-files'
-apt-get -y clean
-
-# Download GRUB for legacy and UEFI servers, both can't be installed simultaneously - PUBM-22671.
-apt-get -y install --download-only grub-efi-amd64
-apt-get -y install --download-only grub-pc
-
-# Make sure grub-efi-amd64 won't change the boot order.
-echo "grub-efi-amd64 grub2/update_nvram boolean false" | debconf-set-selections
-
-# Disable some cloud-init options:
-# grub-dpkg sets an incorrect value to "grub-pc/install_devices" - PUBM-22667.
-# growpart and resizefs are not needed and can cause problems with ZFS
-# partitions or unwanted partition size changes.
-patch /etc/cloud/cloud.cfg << 'EOF'
---- a/etc/cloud/cloud.cfg      2025-12-19 18:06:52.904000000 +0000
-+++ b/etc/cloud/cloud.cfg      2025-12-19 18:06:52.912000000 +0000
-@@ -28,8 +28,6 @@
-   - seed_random
-   - bootcmd
-   - write_files
--  - growpart
--  - resizefs
-   - disk_setup
-   - mounts
-   - set_hostname
-EOF
-
-# Remove hardcoded console-related parameters
+# 50-cloudimg-settings.cfg forces ttyS0 console and net.ifnames=0 for cloud
+# environments; on bare-metal these misdetect the console and interface names.
 rm -f /etc/default/grub.d/50-cloudimg-settings.cfg
+# grub-efi-amd64-signed / shim-signed postinsts modify the EFI boot order and do
+# not honor grub2/update_nvram (LP: #1969845); OVHcloud servers boot over the
+# network. grub-pc must be purged so its install on the target is a FRESH one
+# (only then does its postinst write MBR boot code). linux-image-virtual lacks
+# linux-modules-extra (e.g. r8169 NICs - PUBM-16807/17155); the HWE kernel below
+# replaces it.
+apt-get purge --allow-remove-essential -y \
+    grub-efi-amd64-signed shim-signed grub-pc linux-image-virtual
 
-# Remove old machine-id
+cp /usr/share/grub/default/grub /etc/default/grub
+# nomodeset: KVM display on some boards (PUBM-22537).
+# iommu=pt: avoids AMD kernel panics under load (PUBM-15188).
+sed -i 's/^GRUB_CMDLINE_LINUX=.*/GRUB_CMDLINE_LINUX="nomodeset iommu=pt"/' /etc/default/grub
+sed -i 's/^GRUB_CMDLINE_LINUX_DEFAULT=.*/GRUB_CMDLINE_LINUX_DEFAULT=""/' /etc/default/grub
+
+echo 'grub-efi-amd64 grub2/update_nvram boolean false' | debconf-set-selections
+
+### Phase 2: Repository configuration ###
+
+# During a build the machine-id is ephemeral, so phased-rollout may randomly
+# defer packages. Force all phased updates in so the image is fully up to date.
+echo 'APT::Get::Always-Include-Phased-Updates "true";' \
+    > /etc/apt/apt.conf.d/99-disable-phased-updates
+apt-get update
+
+### Phase 3: Package installation ###
+
+# linux-generic-hwe-20.04 provides the 5.15 kernel and depends on
+# linux-modules-extra (full NIC/storage driver set). ZFS userland is installed
+# so no DKMS build is needed at customer install time (the module ships with the
+# HWE kernel's linux-modules).
+apt-get install --no-install-recommends -y \
+    linux-generic-hwe-20.04 \
+    mdadm lvm2 btrfs-progs xfsprogs dosfstools rsync parted \
+    amd64-microcode intel-microcode linux-firmware \
+    zfsutils-linux zfs-zed zfs-initramfs
+# Import pools at boot when / is not ZFS (the initramfs handles ZFS-root).
+systemctl enable zfs-import-scan.service
+apt-get dist-upgrade -y
+
+### Phase 4: Cleanup (before the download-only steps so those persist) ###
+
+apt-get autoremove --purge -y
+apt-get clean
+
+### Phase 4.5: Single-partition image (BYOL requires exactly one partition) ###
+# Merge any separate /boot and ESP into the root filesystem, then delete the
+# extra partitions; the target's real ESP is recreated by OVHcloud partitioning
+# and make_image_bootable.sh reinstalls GRUB there at deploy time. blkdiscard
+# before parted rm so the freed blocks are actually released in the qcow2.
+root_disk="$(lsblk -no PKNAME "$(findmnt -n -o SOURCE /)")"
+efi_dev="$(findmnt -n -o SOURCE /boot/efi 2>/dev/null || true)"
+boot_dev="$(findmnt -n -o SOURCE /boot 2>/dev/null || true)"
+efi_partnum=""
+if [ -n "$efi_dev" ]; then
+    echo "Staging /boot/efi ($efi_dev)"
+    efi_partnum="$(lsblk -no PARTN "$efi_dev")"
+    rsync -aSH /boot/efi/ /boot_efi.new/
+    umount /boot/efi
+    blkdiscard "$efi_dev"
+fi
+if [ -n "$boot_dev" ]; then
+    echo "Merging /boot ($boot_dev) into the root filesystem"
+    boot_partnum="$(lsblk -no PARTN "$boot_dev")"
+    rsync -aHAX /boot/ /boot.new/
+    umount /boot
+    rmdir /boot
+    mv /boot.new /boot
+    if [ -n "$efi_dev" ]; then
+        mkdir -p /boot/efi
+        rsync -aSH /boot_efi.new/ /boot/efi/
+        rm -rf /boot_efi.new
+    fi
+    blkdiscard "$boot_dev"
+    [ -n "$efi_partnum" ] && parted "/dev/$root_disk" -s "rm $efi_partnum"
+    parted "/dev/$root_disk" -s "rm $boot_partnum"
+elif [ -n "$efi_dev" ]; then
+    rsync -aSH /boot_efi.new/ /boot/efi/
+    rm -rf /boot_efi.new
+    parted "/dev/$root_disk" -s "rm $efi_partnum"
+fi
+# Remove any bios_grub stub partition (GPT type 21686148-6449-6e6f-744e-656564454649).
+lsblk -nro NAME,PARTTYPE "/dev/$root_disk" | while read -r part parttype; do
+    if [ "$parttype" = "21686148-6449-6e6f-744e-656564454649" ]; then
+        echo "Removing bios_grub stub partition /dev/$part"
+        blkdiscard "/dev/$part"
+        parted "/dev/$root_disk" -s "rm $(lsblk -no PARTN "/dev/$part")"
+    fi
+done
+
+### Phase 5: Download-only steps (cached on the image for deploy time) ###
+
+# GRUB for both firmware types; make_image_bootable.sh installs the right one.
+apt-get install --no-install-recommends --download-only -y grub-efi-amd64
+apt-get install --no-install-recommends --download-only -y grub-pc
+# Restore the default phased-update behaviour for the deployed server.
+rm -f /etc/apt/apt.conf.d/99-disable-phased-updates
+
+### Phase 6: Cloud-init tuning ###
+
+# growpart/resizefs resize partitions on first boot and can break custom storage
+# layouts; grub-dpkg records an incorrect GRUB boot disk (PUBM-22667).
+disable_cloud_init_module growpart
+disable_cloud_init_module resizefs
+disable_cloud_init_module 'grub[_-]dpkg'
+
+### Phase 7: Image cleanup ###
+
+apt-get purge -y '?config-files'
+rm -rf /root/.cache
+rm -f /etc/ssh/sshd_config.d/50-cloud-init.conf
+rm -f /etc/netplan/*.yaml
+cloud-init clean
 rm -f /etc/machine-id

@@ -17,7 +17,7 @@ jobs:
             packer_file: alpine.pkr.hcl
             output: alpine.qcow2
           - dir: build_debian-12
-            packer_file: debian-12.json
+            packer_file: debian-12.pkr.hcl
             output: debian-12.qcow2
           - dir: build_archlinux
             packer_file: archlinux.pkr.hcl
