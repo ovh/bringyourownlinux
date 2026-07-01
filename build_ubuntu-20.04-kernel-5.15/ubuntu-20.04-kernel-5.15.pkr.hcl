@@ -1,18 +1,46 @@
 packer {
   required_plugins {
     qemu = {
+      version = ">= 1.1.0"
       source  = "github.com/hashicorp/qemu"
-      version = "~> 1"
     }
   }
 }
 
-source "qemu" "builder" {
-  # cloud-init will use the CD as datasource, see https://cloudinit.readthedocs.io/en/latest/reference/datasources/nocloud.html#source-2-drive-with-labeled-filesystem
-  cd_label                  = "cidata"
-  cd_content                = {
-    "/meta-data" = ""
-    "/user-data" = <<-EOF
+source "qemu" "baremetal" {
+  # Ubuntu 20.04 (focal) cloud image. The 5.15 HWE kernel is installed by
+  # provision.sh.
+  iso_url      = "https://cloud-images.ubuntu.com/focal/current/focal-server-cloudimg-amd64.img"
+  iso_checksum = "file:https://cloud-images.ubuntu.com/focal/current/SHA256SUMS"
+  disk_image   = true
+  # Room for the HWE kernel plus the cached GRUB packages.
+  disk_size = "6G"
+
+  format           = "qcow2"
+  vm_name          = "ubuntu-20.04-kernel-5.15.qcow2"
+  output_directory = "output"
+  disk_compression = true
+
+  accelerator = "kvm"
+  cpus        = 2
+  memory      = 2048
+  headless    = true
+
+  communicator              = "ssh"
+  ssh_username              = "packer"
+  ssh_password              = "packer"
+  ssh_clear_authorized_keys = true
+  ssh_timeout               = "5m"
+
+  shutdown_command = "sudo poweroff"
+
+  # Serial to stdout so boot messages appear in the Packer log (PACKER_LOG=1).
+  qemuargs = [["-serial", "stdio"]]
+
+  # cloud-init NoCloud seed: create the provisioning user from the CD.
+  cd_content = {
+    "meta-data" = ""
+    "user-data" = <<-USERDATA
     #cloud-config
     ssh_pwauth: true
     users:
@@ -20,46 +48,23 @@ source "qemu" "builder" {
         plain_text_passwd: packer
         sudo: ALL=(ALL) NOPASSWD:ALL
         lock_passwd: false
-    EOF
+        shell: /bin/bash
+    USERDATA
   }
-  # Enabling this makes the build much longer but halves the image size
-  disk_compression          = true
-  # The source is a disk image, not an ISO file
-  disk_image                = true
-  # Required for the new kernel to fit into the image
-  disk_size                 = "5G"
-  format                    = "qcow2"
-  # Do not launch QEMU's GUI
-  headless                  = true
-  iso_checksum              = "file:https://cloud-images.ubuntu.com/focal/current/SHA256SUMS"
-  iso_url                   = "https://cloud-images.ubuntu.com/focal/current/focal-server-cloudimg-amd64.img"
-  # Allows us to see the VM's console when PACKER_LOG=1 is set
-  qemuargs                  = [["-serial", "stdio"]]
-  # Before shutting down, truncate logs and remove everything linked to the provisioning user
-  shutdown_command          = "sudo sh -c 'find /var/log/ -type f -exec truncate --size 0 {} + && rm -f /etc/sudoers.d/90-cloud-init-users && userdel -fr packer && poweroff'"
-  communicator              = "ssh"
-  ssh_clear_authorized_keys = true
-  ssh_username              = "packer"
-  ssh_password              = "packer"
-  # The resulting image will be written to output/ubuntu2004-kernel-5.15.qcow2
-  output_directory          = "output"
-  vm_name                   = "ubuntu-20.04-kernel-5.15.qcow2"
+  cd_label = "cidata"
 }
 
 build {
-  sources = ["source.qemu.builder"]
-
-  provisioner "shell" {
-    execute_command = "chmod +x {{ .Path }} && sudo {{ .Path }}"
-    script          = "provision.sh"
-  }
+  sources = ["source.qemu.baremetal"]
 
   provisioner "file" {
-    destination = "/tmp/make_image_bootable.sh"
     source      = "make_image_bootable.sh"
+    destination = "/tmp/make_image_bootable.sh"
   }
 
   provisioner "shell" {
-    inline = ["sudo sh -c 'mkdir /root/.ovh/ && mv /tmp/make_image_bootable.sh /root/.ovh/ && chmod -R +x /root/.ovh/'"]
+    execute_command  = "chmod +x {{ .Path }} && sudo {{ .Path }}"
+    script           = "provision.sh"
+    environment_vars = ["DEBIAN_FRONTEND=noninteractive"]
   }
 }
