@@ -106,11 +106,11 @@ _All the following process is done on a Debian 11 bare metal server as `root` us
 
 1. A `mydistrib.json` file is required to run packer
 
-    For an example, see this [file](build_debian-11-kernel-6/deb11k6.json)
+    For an example, see this [file](build_debian-12/debian-12.json)
 
 2. An `httpdir` directory containing:
     - an empty `meta-data` file
-      or filled as in this [example](build_debian-11-kernel-6/httpdir/meta-data)
+      or filled as in this [example](build_debian-12/httpdir/meta-data)
     - a `user-data` file that can be either a script, as follows:
 
         ```bash
@@ -124,7 +124,7 @@ _All the following process is done on a Debian 11 bare metal server as `root` us
         shutdown -Hr now
         ```
 
-      or a `cloud-init` script like this [example](build_debian-11-kernel-6/httpdir/user-data)
+      or a `cloud-init` script like this [example](build_debian-12/httpdir/user-data)
 
 3. Install `packer`, `qemu-system-x86`, `genisoimage`, and `qemu-utils`
 
@@ -293,9 +293,17 @@ The script can be used, for instance, to generate an ad hoc initramfs, embedding
 > access may be available, but it is recommended to include all necessary packages in your image
 > rather than relying on network access during this step.
 
-See the [`make_image_bootable.sh`](build_debian-11-kernel-6/files/make_image_bootable.sh) example file.
+See the [`make_image_bootable.sh`](build_debian-12/files/make_image_bootable.sh) example file.
 
 <a name="links"></a>
+
+## Automated builds
+
+The example images in the `build_*` directories (Alpine, Debian 11, Arch, Ubuntu
+20.04) are built with Packer and published as GitHub Release assets by the
+[`Builder`](.github/workflows/packer.yml) workflow when a version tag (e.g. `1.0`)
+is pushed. Each release contains the `*.qcow2` image and its `*.sha512` checksum,
+ready to be referenced from the `imageURL` / `imageCheckSum` fields described above.
 
 ## Related links
 

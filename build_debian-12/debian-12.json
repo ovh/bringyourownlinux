@@ -9,10 +9,10 @@
         {
             "name": "20_builder",
             "type": "qemu",
-            "iso_url": "https://cdimage.debian.org/cdimage/cloud/bullseye/latest/debian-11-generic-amd64.qcow2",
-            "iso_checksum": "file:https://cdimage.debian.org/cdimage/cloud/bullseye/latest/SHA512SUMS",
+            "iso_url": "https://cdimage.debian.org/cdimage/cloud/bookworm/latest/debian-12-generic-amd64.qcow2",
+            "iso_checksum": "file:https://cdimage.debian.org/cdimage/cloud/bookworm/latest/SHA512SUMS",
             "disk_image": true,
-            "disk_size": "3G",
+            "disk_size": "5G",
             "disk_compression": true,
             "format": "qcow2",
             "headless": "true",
@@ -24,7 +24,7 @@
             "temporary_key_pair_type": "ed25519",
             "shutdown_command": "echo 'packer' | sudo -S shutdown -P now",
             "output_directory": "output",
-            "vm_name": "deb11k6.qcow2",
+            "vm_name": "debian-12.qcow2",
             "qemuargs": [
                 [
                     "-serial",

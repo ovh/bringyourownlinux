@@ -9,7 +9,7 @@
 # governing permissions and limitations under the License.
 
 ######################################################
-# This is an example script that works for debian 11 #
+# This is an example script that works for debian 12 #
 ######################################################
 
 set -euo pipefail
