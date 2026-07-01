@@ -1,18 +1,47 @@
 packer {
   required_plugins {
     qemu = {
+      version = ">= 1.1.0"
       source  = "github.com/hashicorp/qemu"
-      version = "~> 1"
     }
   }
 }
 
-source "qemu" "builder" {
-  # cloud-init will use the CD as datasource, see https://cloudinit.readthedocs.io/en/latest/reference/datasources/nocloud.html#source-2-drive-with-labeled-filesystem
-  cd_label                  = "cidata"
-  cd_content                = {
-    "/meta-data" = ""
-    "/user-data" = <<-EOF
+source "qemu" "baremetal" {
+  # Arch Linux cloud image (rolling). provision.sh installs the bare-metal
+  # tooling and collapses the image to a single partition.
+  iso_url      = "https://archlinux.mirrors.ovh.net/archlinux/images/latest/Arch-Linux-x86_64-cloudimg.qcow2"
+  iso_checksum = "file:https://archlinux.mirrors.ovh.net/archlinux/images/latest/Arch-Linux-x86_64-cloudimg.qcow2.SHA256"
+  disk_image   = true
+  # Grow the ~2G source so the system upgrade plus firmware/microcode packages
+  # do not fill the disk.
+  disk_size = "4G"
+
+  format           = "qcow2"
+  vm_name          = "archlinux.qcow2"
+  output_directory = "output"
+  disk_compression = true
+
+  accelerator = "kvm"
+  cpus        = 2
+  memory      = 2048
+  headless    = true
+
+  communicator              = "ssh"
+  ssh_username              = "packer"
+  ssh_password              = "packer"
+  ssh_clear_authorized_keys = true
+  ssh_timeout               = "5m"
+
+  shutdown_command = "sudo poweroff"
+
+  # Serial to stdout so boot messages appear in the Packer log (PACKER_LOG=1).
+  qemuargs = [["-serial", "stdio"]]
+
+  # cloud-init NoCloud seed: create the provisioning user from the CD.
+  cd_content = {
+    "meta-data" = ""
+    "user-data" = <<-USERDATA
     #cloud-config
     ssh_pwauth: true
     users:
@@ -20,47 +49,21 @@ source "qemu" "builder" {
         plain_text_passwd: packer
         sudo: ALL=(ALL) NOPASSWD:ALL
         lock_passwd: false
-    EOF
+    USERDATA
   }
-  # Enabling this makes the build longer but reduces the image size
-  disk_compression          = true
-  # The source is a disk image, not an ISO file
-  disk_image                = true
-  # The source image is ~2G; grow it so the system upgrade plus the firmware and
-  # microcode packages installed by provision.sh do not fill the disk (ENOSPC).
-  disk_size                 = "4G"
-  format                    = "qcow2"
-  # Do not launch QEMU's GUI
-  headless                  = true
-  iso_checksum              = "file:https://archlinux.mirrors.ovh.net/archlinux/images/latest/Arch-Linux-x86_64-cloudimg.qcow2.SHA256"
-  iso_url                   = "https://archlinux.mirrors.ovh.net/archlinux/images/latest/Arch-Linux-x86_64-cloudimg.qcow2"
-  # Allows us to see the VM's console when PACKER_LOG=1 is set
-  qemuargs                  = [["-serial", "stdio"]]
-  # Before shutting down, truncate logs and remove everything linked to the provisioning user
-  shutdown_command          = "sudo sh -c 'find /var/log/ -type f -exec truncate --size 0 {} + && rm -f /etc/sudoers.d/90-cloud-init-users && userdel -fr packer && poweroff'"
-  communicator              = "ssh"
-  ssh_clear_authorized_keys = true
-  ssh_username              = "packer"
-  ssh_password              = "packer"
-  # The resulting image will be written to output/archlinux.qcow2
-  output_directory          = "output"
-  vm_name                   = "archlinux.qcow2"
+  cd_label = "cidata"
 }
 
 build {
-  sources = ["source.qemu.builder"]
+  sources = ["source.qemu.baremetal"]
+
+  provisioner "file" {
+    source      = "make_image_bootable.sh"
+    destination = "/tmp/make_image_bootable.sh"
+  }
 
   provisioner "shell" {
     execute_command = "chmod +x {{ .Path }} && sudo {{ .Path }}"
     script          = "provision.sh"
-  }
-
-  provisioner "file" {
-    destination = "/tmp/make_image_bootable.sh"
-    source      = "make_image_bootable.sh"
-  }
-
-  provisioner "shell" {
-    inline = ["sudo sh -c 'mkdir /root/.ovh/ && mv /tmp/make_image_bootable.sh /root/.ovh/ && chmod -R +x /root/.ovh/'"]
   }
 }
