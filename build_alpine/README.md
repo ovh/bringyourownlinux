@@ -1,43 +1,35 @@
-# Alpine Linux build example
+# Alpine Linux BYOL image
 
-This directory contains a Packer configuration for building an Alpine Linux image
-suitable for OVHcloud baremetal servers.
+Packer example that builds a Bring Your Own Linux (BYOL) compatible Alpine image
+for OVHcloud bare-metal servers.
 
-## Files
+## What it builds
 
-- `alpine.pkr.hcl` - Packer configuration (HCL format)
-- `provision.sh` - prepares the Alpine system for baremetal deployment
-- `make_image_bootable.sh` - installed into `/root/.ovh/`, runs at install time to
-  make the image bootable on OVHcloud baremetal servers
+- **Base image:** Alpine 3.22 cloud image (`nocloud_alpine-3.22.1-x86_64-bios-cloudinit-metal`)
+- **Kernel:** Alpine `linux-lts`
+- **Output:** `output/alpine.qcow2`
+- Single ext4 root partition, cloud-init enabled, with
+  `/root/.ovh/make_image_bootable.sh` embedded.
 
-## Building the image
+## EFI bootloader path
+
+On a UEFI server, `make_image_bootable.sh` installs GRUB to the EFI System
+Partition at:
+
+```
+\EFI\alpine\grubx64.efi
+```
+
+This is the path of the EFI bootloader in the OS installed on the server; use it
+if a deployment/reinstall needs the EFI bootloader location. On legacy BIOS
+servers, GRUB is written to the MBR of the boot disk(s) instead.
+
+## Build
 
 ```bash
 packer init alpine.pkr.hcl
 PACKER_LOG=1 packer build alpine.pkr.hcl
 ```
 
-The resulting image is written to `output/alpine.qcow2`.
-
-## Configuration details
-
-This build starts from the official Alpine **cloud** image (BIOS + cloud-init +
-bare-metal variant) rather than the installer ISO, so cloud-init can bring up the
-provisioning user from the `cidata` drive, exactly like the other builds in this
-repository.
-
-It uses:
-
-- Alpine Linux 3.22 (`nocloud_alpine-3.22.1-x86_64-bios-cloudinit-metal`)
-- the QEMU Packer builder
-- GRUB configured for both legacy and UEFI baremetal boot
-- support for RAID, LVM, btrfs/xfs/ext4 filesystems
-- Intel and AMD microcode
-
-> Alpine does not publish a "latest" symlink for cloud images, so the version is
-> pinned in `alpine.pkr.hcl` and must be bumped explicitly (Renovate can track it).
-
-## Requirements
-
-- Packer 1.7+
-- QEMU with KVM acceleration
+> Alpine publishes no "latest" symlink for cloud images, so the version is pinned
+> in `alpine.pkr.hcl` and must be bumped explicitly (Renovate can track it).

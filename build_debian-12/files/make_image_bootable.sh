@@ -213,7 +213,8 @@ install_grub() {
         # patches to grub; Debian's grub-efi postinst has no such machinery.
         # The explicit grub-install below installs to the mounted ESP.
         apt-get install --no-install-recommends -y grub-efi-amd64
-        grub-install --target=x86_64-efi --efi-directory=/boot/efi --no-nvram
+        # --bootloader-id fixes the ESP path to \EFI\debian\grubx64.efi.
+        grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=debian --no-nvram
         apt-get purge -y grub-pc-bin
     else
         echo "    Legacy BIOS boot detected."
