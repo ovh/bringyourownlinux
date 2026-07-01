@@ -10,7 +10,8 @@
 
 # This script makes an Arch Linux image bootable on OVHcloud baremetal servers
 
-set -eo pipefail
+# -x so the OVH install log shows exactly which command fails
+set -exo pipefail
 
 configure_console() {
     echo "Getting console parameters from the cmdline"
@@ -46,8 +47,10 @@ configure_console() {
 # Detect boot mode and install GRUB
 if [ -d /sys/firmware/efi ]; then
     echo "INFO - GRUB will be configured for UEFI boot"
-    # Pass --no-nvram to avoid changing the boot order, the server needs to boot via PXE
-    grub-install --target=x86_64-efi --no-nvram
+    # --efi-directory: OVH mounts the ESP at /boot/efi (as in the Debian example).
+    # --removable also writes the fallback path EFI/BOOT/BOOTX64.EFI so the server
+    # boots without an NVRAM entry; --no-nvram leaves the boot order untouched.
+    grub-install --target=x86_64-efi --efi-directory=/boot/efi --removable --no-nvram
 else
     echo "INFO - GRUB will be configured for legacy boot"
     bootDevice="$(findmnt -A -c -e -l -n -T /boot/ -o SOURCE)"
