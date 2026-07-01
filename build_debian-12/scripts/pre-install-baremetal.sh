@@ -43,7 +43,7 @@ apt-get update
 # Install the latest kernel from backports
 apt-get -y install --no-install-recommends -t bookworm-backports linux-image-amd64
 
-apt-get -y install --no-install-recommends mdadm lvm2 btrfs-progs amd64-microcode intel-microcode
+apt-get -y install --no-install-recommends mdadm lvm2 btrfs-progs amd64-microcode intel-microcode rsync parted
 # We will install these in make_image_bootable.sh and only when ZFS is used.
 # Pull them from backports so the headers and ZFS module match the backported
 # kernel installed above. linux-headers-amd64 needs to be manually specified
@@ -55,6 +55,34 @@ apt-get -y dist-upgrade
 # Cleanup
 apt-get -y autoremove
 apt-get -y clean
+
+### Make the image single-partition (BYOL requirement) ###
+# The generic cloud image ships an ESP and a bios_grub stub alongside the Linux
+# root partition, but BYOL requires a single partition. Merge the ESP into the
+# root filesystem and delete the extra partitions; the target's real ESP is
+# recreated by OVHcloud partitioning and make_image_bootable.sh reinstalls GRUB
+# there at deploy time. blkdiscard before parted rm releases the freed blocks in
+# the qcow2 instead of leaving them allocated.
+root_disk="$(lsblk -no PKNAME "$(findmnt -n -o SOURCE /)")"
+efi_dev="$(findmnt -n -o SOURCE /boot/efi 2>/dev/null || true)"
+if [ -n "$efi_dev" ]; then
+    echo "Merging /boot/efi ($efi_dev) into the root filesystem"
+    efi_partnum="$(lsblk -no PARTN "$efi_dev")"
+    rsync -aSH /boot/efi/ /boot_efi.new/
+    umount /boot/efi
+    blkdiscard "$efi_dev"
+    rsync -aSH /boot_efi.new/ /boot/efi/
+    rm -rf /boot_efi.new
+    parted "/dev/$root_disk" -s "rm $efi_partnum"
+fi
+# Remove any bios_grub stub partition (GPT type 21686148-6449-6e6f-744e-656564454649).
+lsblk -nro NAME,PARTTYPE "/dev/$root_disk" | while read -r part parttype; do
+    if [ "$parttype" = "21686148-6449-6e6f-744e-656564454649" ]; then
+        echo "Removing bios_grub stub partition /dev/$part"
+        blkdiscard "/dev/$part"
+        parted "/dev/$root_disk" -s "rm $(lsblk -no PARTN "/dev/$part")"
+    fi
+done
 
 # Download GRUB for legacy and UEFI servers, both can't be installed simultaneously.
 apt-get -y install --no-install-recommends --download-only grub-efi-amd64
