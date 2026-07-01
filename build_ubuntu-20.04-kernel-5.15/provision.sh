@@ -88,14 +88,16 @@ boot_dev="$(findmnt -n -o SOURCE /boot 2>/dev/null || true)"
 efi_partnum=""
 if [ -n "$efi_dev" ]; then
     echo "Staging /boot/efi ($efi_dev)"
-    efi_partnum="$(lsblk -no PARTN "$efi_dev")"
+    # Trailing digits of the device name are the partition number (PARTN is not
+    # available on older util-linux).
+    efi_partnum="${efi_dev##*[!0-9]}"
     rsync -aSH /boot/efi/ /boot_efi.new/
     umount /boot/efi
     blkdiscard "$efi_dev"
 fi
 if [ -n "$boot_dev" ]; then
     echo "Merging /boot ($boot_dev) into the root filesystem"
-    boot_partnum="$(lsblk -no PARTN "$boot_dev")"
+    boot_partnum="${boot_dev##*[!0-9]}"
     rsync -aHAX /boot/ /boot.new/
     umount /boot
     rmdir /boot
@@ -118,7 +120,7 @@ lsblk -nro NAME,PARTTYPE "/dev/$root_disk" | while read -r part parttype; do
     if [ "$parttype" = "21686148-6449-6e6f-744e-656564454649" ]; then
         echo "Removing bios_grub stub partition /dev/$part"
         blkdiscard "/dev/$part"
-        parted "/dev/$root_disk" -s "rm $(lsblk -no PARTN "/dev/$part")"
+        parted "/dev/$root_disk" -s "rm ${part##*[!0-9]}"
     fi
 done
 
