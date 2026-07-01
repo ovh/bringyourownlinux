@@ -1,86 +1,110 @@
 #!/bin/bash
-
-# Licensed under the Apache License, Version 2.0 (the "License"); you may not use this
-# file except in compliance with the License. You may obtain a copy of the License at
-# http://www.apache.org/licenses/LICENSE-2.0
-# Unless required by applicable law or agreed to in writing, software distributed under
-# the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF
-# ANY KIND, either express or implied. See the License for the specific language
-# governing permissions and limitations under the License.
+set -euo pipefail
 
 # This script makes an Alpine Linux image bootable on OVHcloud baremetal servers.
 # It runs chrooted inside the freshly deployed filesystem, right before the first
-# reboot. bash is required (installed by provision.sh) for the associative array
-# and here-string used below.
+# reboot. bash, GNU grep/sed, grub and util-linux are installed by provision.sh.
 
-# -x so the OVH install log shows exactly which command fails
-set -exo pipefail
+### Step 1: Console configuration ###
 
 configure_console() {
-    echo "Getting console parameters from the cmdline"
-    # Get the right console parameters (including SOL if available) from the
-    # rescue's cmdline - PUBM-16534
-    console_parameters="$(grep -Po '\bconsole=\S+' /proc/cmdline | paste -s -d" ")"
-    if ! grep '^GRUB_CMDLINE_LINUX="' /etc/default/grub | grep -qF "$console_parameters"; then
-        sed -Ei "s/(^GRUB_CMDLINE_LINUX=.*)\"\$/\1 $console_parameters\"/" /etc/default/grub
-    fi
+    local cmdline console_params
+    cmdline=$(cat /proc/cmdline)
+    console_params=$(echo "$cmdline" | grep -oP 'console=\S+' || true)
+    [ -z "$console_params" ] && return
 
-    # Also pass these parameters to GRUB
-    parameters=$(sed -nE "s/.*\bconsole=ttyS([0-9]),([0-9]+)([noe])([0-9]+)\b.*/\1 \2 \3 \4/p" /proc/cmdline)
-    if [[ ! "$parameters" ]]; then
-        # No SOL, nothing to do
-        return
-    fi
-    read -r unit speed parity bits <<< "$parameters"
-    declare -A parities=([o]=odd [e]=even [n]=no)
-    parity="${parities["$parity"]}"
-    serial_command="serial --unit=$unit --speed=$speed --parity=$parity --word=$bits"
+    local current param
+    current=$(sed -n 's/^GRUB_CMDLINE_LINUX="\(.*\)"/\1/p' /etc/default/grub)
+    for param in $console_params; do
+        echo " $current " | grep -qF " $param " || current="$current $param"
+    done
+    current=$(echo "$current" | sed 's/^ *//')
+    sed -i "s|^GRUB_CMDLINE_LINUX=.*|GRUB_CMDLINE_LINUX=\"$current\"|" /etc/default/grub
 
-    if grep -qFx 'GRUB_TERMINAL="console serial"' /etc/default/grub; then
-        # Configuration already applied
-        return
-    fi
+    local serial_param
+    serial_param=$(echo "$console_params" | grep 'ttyS' | tail -1 || true)
+    [ -z "$serial_param" ] && return
 
-    sed -i \
-        -e "/^# Uncomment to disable graphical terminal/d" \
-        -e "s/^#GRUB_TERMINAL=.*/GRUB_TERMINAL=\"console serial\"\nGRUB_SERIAL_COMMAND=\"$serial_command\"/" \
-        /etc/default/grub
+    local tty_part settings_part unit speed parity_char parity word
+    tty_part=$(echo "$serial_param" | sed 's/console=//' | cut -d, -f1)
+    settings_part=$(echo "$serial_param" | sed 's/console=//' | cut -d, -f2)
+    unit=$(echo "$tty_part" | sed 's/ttyS//')
+    speed=$(echo "$settings_part" | grep -oP '^\d+')
+    parity_char=$(echo "$settings_part" | grep -oP '\d+\K[noe]')
+    word=$(echo "$settings_part" | grep -oP '[noe]\K\d')
+    case "$parity_char" in
+        n) parity="no" ;; o) parity="odd" ;; e) parity="even" ;;
+    esac
+
+    if grep -q '^GRUB_TERMINAL=' /etc/default/grub; then
+        sed -i 's|^GRUB_TERMINAL=.*|GRUB_TERMINAL="console serial"|' /etc/default/grub
+    else
+        echo 'GRUB_TERMINAL="console serial"' >> /etc/default/grub
+    fi
+    local serial_cmd="serial --unit=$unit --speed=$speed --parity=$parity --word=$word"
+    if grep -q '^GRUB_SERIAL_COMMAND=' /etc/default/grub; then
+        sed -i "s|^GRUB_SERIAL_COMMAND=.*|GRUB_SERIAL_COMMAND=\"$serial_cmd\"|" /etc/default/grub
+    else
+        echo "GRUB_SERIAL_COMMAND=\"$serial_cmd\"" >> /etc/default/grub
+    fi
 }
 
-# Detect boot mode and install GRUB
-if [ -d /sys/firmware/efi ]; then
-    echo "INFO - GRUB will be configured for UEFI boot"
-    # --efi-directory: OVH mounts the ESP at /boot/efi (as in the Debian example).
-    # --removable also writes the fallback path EFI/BOOT/BOOTX64.EFI so the server
-    # boots without an NVRAM entry; --no-nvram leaves the boot order untouched.
-    grub-install --target=x86_64-efi --efi-directory=/boot/efi --removable --no-nvram
-else
-    echo "INFO - GRUB will be configured for legacy boot"
-    bootDevice="$(findmnt -A -c -e -l -n -T /boot/ -o SOURCE)"
-    realBootDevices="$(lsblk -n -p -b -l -o TYPE,NAME $bootDevice -s | awk '$1 == "disk" && !seen[$2]++ {print $2}')"
-    # realBootDevices are disks at this point
-    for realBootDevice in $realBootDevices; do
-        echo "INFO - GRUB will be configured on disk ${realBootDevice}"
-        # realBootDevice is the boot disk device canonical path
-        grub-install --target=i386-pc --force "$realBootDevice"
-    done
-fi
+### Step 2: mdadm configuration ###
 
-# Configure SOL console
+configure_mdadm() {
+    # Record running arrays so the initramfs (mdadm_udev) assembles them.
+    mdadm --detail --scan > /etc/mdadm.conf 2>/dev/null || true
+}
+
+### Step 3: GRUB installation ###
+
+install_grub() {
+    if [ -d /sys/firmware/efi ]; then
+        echo "    UEFI boot detected."
+        # --efi-directory: OVHcloud partitioning mounts the ESP at /boot/efi.
+        # --no-nvram: OVHcloud servers boot over the network; do not touch the
+        # firmware boot order.
+        grub-install --target=x86_64-efi --efi-directory=/boot/efi --no-nvram
+    else
+        echo "    Legacy BIOS boot detected."
+        local boot_device disks disk
+        boot_device="$(findmnt -A -c -e -l -n -T /boot/ -o SOURCE)"
+        disks="$(lsblk -n -p -b -l -o TYPE,NAME "$boot_device" -s \
+            | awk '$1 == "disk" && !seen[$2]++ {print $2}')"
+        for disk in $disks; do
+            echo "    Installing GRUB on $disk"
+            grub-install --target=i386-pc --force "$disk"
+        done
+    fi
+}
+
+### Step 4: System finalization ###
+
+finalize() {
+    # Alpine has no systemd-machine-id-setup: generate a fresh machine-id.
+    tr -d '-' < /proc/sys/kernel/random/uuid > /etc/machine-id
+
+    grub-mkconfig -o /boot/grub/grub.cfg
+
+    # Regenerate the initramfs for the installed kernel (uname -r is the rescue
+    # kernel here, so take the version from /lib/modules).
+    local kernel_version
+    kernel_version="$(ls -1 /lib/modules | head -n1)"
+    mkinitfs "$kernel_version"
+
+    rm -rf /root/.ovh
+}
+
+### Main ###
+
+exec > >(tee -a /var/log/ovh-make-bootable.log) 2>&1
+
+echo ">>> Configuring console..."
 configure_console
-
-# Generate a unique machine-id (Alpine has no systemd-machine-id-setup)
-rm -f /etc/machine-id
-tr -d '-' < /proc/sys/kernel/random/uuid > /etc/machine-id
-
-# Generate GRUB config
-grub-mkconfig -o /boot/grub/grub.cfg
-
-# Regenerate the initramfs for the installed kernel to embed e.g. mdadm/lvm and
-# the required disk/NIC modules. uname -r points at the rescue kernel here, so the
-# installed kernel version is taken from /lib/modules.
-kernel_version="$(ls -1 /lib/modules | head -n1)"
-mkinitfs "$kernel_version"
-
-# Cleanup
-rm -fr /root/.ovh/
+echo ">>> Configuring mdadm..."
+configure_mdadm
+echo ">>> Installing GRUB..."
+install_grub
+echo ">>> Finalizing system..."
+finalize
+echo ">>> make_image_bootable.sh complete."

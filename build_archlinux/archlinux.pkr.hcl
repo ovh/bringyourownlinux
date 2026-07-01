@@ -33,7 +33,8 @@ source "qemu" "baremetal" {
   ssh_clear_authorized_keys = true
   ssh_timeout               = "5m"
 
-  shutdown_command = "sudo poweroff"
+  # Remove the provisioning user (known password) before powering off.
+  shutdown_command = "sudo sh -c 'userdel -rf packer 2>/dev/null; poweroff'"
 
   # Serial to stdout so boot messages appear in the Packer log (PACKER_LOG=1).
   qemuargs = [["-serial", "stdio"]]
