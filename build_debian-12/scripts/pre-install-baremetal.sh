@@ -1,27 +1,46 @@
 #!/bin/bash
-
 set -euo pipefail
 
 export DEBIAN_FRONTEND=noninteractive
 
-# This forces GRUB to use PARTUUID instead of UUID for root=, which does not
-# work for us, see
-# https://salsa.debian.org/cloud-team/debian-cloud-images/-/merge_requests/388
+# Place the post-install script that the deployer runs, chrooted, on the target.
+mkdir -p /root/.ovh
+mv /tmp/make_image_bootable.sh /root/.ovh/make_image_bootable.sh
+chmod +x /root/.ovh/make_image_bootable.sh
+
+# Remove a cloud-init module from cloud.cfg, failing loudly if it is missing so
+# an upstream rename is caught at build time rather than silently ignored.
+disable_cloud_init_module() {
+    local module="$1"
+    grep -qE "^ *- $module\$" /etc/cloud/cloud.cfg \
+        || { echo "ERROR: cloud-init module '$module' not found in cloud.cfg" >&2; exit 1; }
+    sed -i -E "/^ *- $module\$/d" /etc/cloud/cloud.cfg
+}
+
+### Phase 1: GRUB preparation ###
+
+# 10_cloud.cfg forces root=PARTUUID=, which is empty on bare-metal and yields an
+# unbootable OS (PUBM-37334).
 rm -f /etc/default/grub.d/10_cloud.cfg
+# grub-cloud-amd64 misbehaves on bare-metal (PUBM-22667). Remove grub-efi-amd64-signed
+# too: on legacy servers, purging grub-efi-amd64-bin while the signed package
+# remains pulls in efibootmgr + systemd-boot as replacements. Purge the stock
+# kernels so only the backported kernel installed below remains.
+apt-get purge --allow-remove-essential -y grub-cloud-amd64 grub-efi-amd64-signed 'linux-image-*'
 
-# grub-cloud can cause problems after the server is installed
-# purge the old kernels
-apt-get -y purge grub-cloud-amd64 linux-image-*
-# Restore a default grub config as the old file belonged to grub-cloud-amd64 and got removed
-# by the purge.
-# Copying /usr/share/grub/default/grub to /etc/default/grub is otherwise done by
-# grub-pc or grub-efi-amd64's postinst.
 cp /usr/share/grub/default/grub /etc/default/grub
+# nomodeset: KVM display on some boards (PUBM-22537).
+# iommu=pt: avoids AMD kernel panics under load (PUBM-15188).
+sed -i 's/^GRUB_CMDLINE_LINUX=.*/GRUB_CMDLINE_LINUX="nomodeset iommu=pt"/' /etc/default/grub
+sed -i 's/^GRUB_CMDLINE_LINUX_DEFAULT=.*/GRUB_CMDLINE_LINUX_DEFAULT=""/' /etc/default/grub
 
-# Enable contrib + non-free (ZFS) and non-free-firmware (AMD/Intel microcodes),
-# and add bookworm-backports to pull the latest Debian kernel. Handle both the
-# deb822 (.sources) layout used by recent cloud images and the legacy one-line
-# sources.list, so this keeps working whichever the base image ships.
+echo 'grub-efi-amd64 grub2/update_nvram boolean false' | debconf-set-selections
+
+### Phase 2: Repository configuration ###
+
+# Enable contrib + non-free (ZFS) and non-free-firmware (microcodes), and add
+# bookworm-backports for the latest kernel. Handle both the deb822 (.sources)
+# and the legacy one-line sources.list layout, whichever the base image ships.
 if [ -f /etc/apt/sources.list.d/debian.sources ]; then
     sed -i 's/^Components:.*/Components: main contrib non-free non-free-firmware/' \
         /etc/apt/sources.list.d/debian.sources
@@ -37,32 +56,30 @@ else
     echo "deb http://deb.debian.org/debian bookworm-backports main contrib non-free non-free-firmware" \
         > /etc/apt/sources.list.d/backports.list
 fi
-
 apt-get update
 
-# Install the latest kernel from backports
-apt-get -y install --no-install-recommends -t bookworm-backports linux-image-amd64
+### Phase 3: Package installation ###
 
-apt-get -y install --no-install-recommends mdadm lvm2 btrfs-progs amd64-microcode intel-microcode rsync parted
-# We will install these in make_image_bootable.sh and only when ZFS is used.
-# Pull them from backports so the headers and ZFS module match the backported
-# kernel installed above. linux-headers-amd64 needs to be manually specified
-# because dkms only recommends it.
-apt-get -y install --no-install-recommends --download-only -t bookworm-backports \
-    linux-headers-amd64 zfs-dkms zfs-initramfs zfs-zed
-apt-get -y dist-upgrade
+# Latest kernel from backports (replaces the stock kernels purged in Phase 1).
+apt-get install --no-install-recommends -y -t bookworm-backports linux-image-amd64
+# Bare-metal tooling: RAID/LVM/filesystems, microcodes, firmware, plus the
+# partition tools used by the single-partition step below.
+apt-get install --no-install-recommends -y \
+    mdadm lvm2 btrfs-progs xfsprogs dosfstools rsync parted \
+    amd64-microcode intel-microcode firmware-linux
+apt-get dist-upgrade -y
 
-# Cleanup
-apt-get -y autoremove
-apt-get -y clean
+### Phase 4: Cleanup (before the download-only steps so those persist) ###
 
-### Make the image single-partition (BYOL requirement) ###
+apt-get autoremove --purge -y
+apt-get clean
+
+### Phase 4.5: Single-partition image (BYOL requires exactly one partition) ###
 # The generic cloud image ships an ESP and a bios_grub stub alongside the Linux
-# root partition, but BYOL requires a single partition. Merge the ESP into the
-# root filesystem and delete the extra partitions; the target's real ESP is
-# recreated by OVHcloud partitioning and make_image_bootable.sh reinstalls GRUB
-# there at deploy time. blkdiscard before parted rm releases the freed blocks in
-# the qcow2 instead of leaving them allocated.
+# root. Merge the ESP into the root filesystem and delete the extra partitions;
+# the target's real ESP is recreated by OVHcloud partitioning and
+# make_image_bootable.sh reinstalls GRUB there at deploy time. blkdiscard before
+# parted rm so the freed blocks are actually released in the qcow2.
 root_disk="$(lsblk -no PKNAME "$(findmnt -n -o SOURCE /)")"
 efi_dev="$(findmnt -n -o SOURCE /boot/efi 2>/dev/null || true)"
 if [ -n "$efi_dev" ]; then
@@ -84,29 +101,27 @@ lsblk -nro NAME,PARTTYPE "/dev/$root_disk" | while read -r part parttype; do
     fi
 done
 
-# Download GRUB for legacy and UEFI servers, both can't be installed simultaneously.
-apt-get -y install --no-install-recommends --download-only grub-efi-amd64
-apt-get -y install --no-install-recommends --download-only grub-pc
-# Make sure grub-efi-amd64 won't change the boot order.
-echo "grub-efi-amd64 grub2/update_nvram boolean false" | debconf-set-selections
+### Phase 5: Download-only steps (cached on the image for deploy time) ###
 
-# Disable some cloud-init options:
-# grub-dpkg sets an incorrect value to "grub-pc/install_devices".
-# growpart and resizefs are not needed and can cause problems with ZFS partitions.
-sed -Ei '/^ - (grub-dpkg|growpart|resizefs)/d' /etc/cloud/cloud.cfg
+# ZFS + matching headers from backports (to match the backported kernel), and
+# GRUB for both firmware types; make_image_bootable.sh installs the right one.
+apt-get install --no-install-recommends --download-only -y -t bookworm-backports \
+    linux-headers-amd64 zfs-dkms zfs-initramfs zfs-zed
+apt-get install --no-install-recommends --download-only -y grub-efi-amd64
+apt-get install --no-install-recommends --download-only -y grub-pc
 
-# Make ifupdown more verbose to help detect bugs/misconfigurations
-#sed -i 's/^#VERBOSE=.*/VERBOSE=yes/' /etc/default/networking
+### Phase 6: Cloud-init tuning ###
 
-# Configure GRUB for baremetal boot. Use sed rather than a context patch so this
-# stays robust across changes to Debian's default grub template.
-sed -Ei \
-    -e 's|^GRUB_CMDLINE_LINUX=.*|GRUB_CMDLINE_LINUX="nomodeset iommu=pt"|' \
-    -e 's|^GRUB_CMDLINE_LINUX_DEFAULT=.*|GRUB_CMDLINE_LINUX_DEFAULT=""|' \
-    /etc/default/grub
-grep -q '^GRUB_GFXPAYLOAD_LINUX=' /etc/default/grub \
-    && sed -Ei 's|^GRUB_GFXPAYLOAD_LINUX=.*|GRUB_GFXPAYLOAD_LINUX="text"|' /etc/default/grub \
-    || echo 'GRUB_GFXPAYLOAD_LINUX="text"' >> /etc/default/grub
+# growpart/resizefs resize partitions on first boot and can break custom storage
+# layouts; grub-dpkg records an incorrect GRUB boot disk (PUBM-22667).
+disable_cloud_init_module growpart
+disable_cloud_init_module resizefs
+disable_cloud_init_module 'grub[_-]dpkg'
 
-# Remove old machine-id
+### Phase 7: Image cleanup ###
+
+apt-get purge -y '?config-files'
+rm -rf /root/.cache
+rm -f /etc/ssh/sshd_config.d/50-cloud-init.conf
+cloud-init clean
 rm -f /etc/machine-id
