@@ -64,7 +64,8 @@ install_grub() {
         # --efi-directory: OVHcloud partitioning mounts the ESP at /boot/efi.
         # --no-nvram: OVHcloud servers boot over the network; do not touch the
         # firmware boot order.
-        grub-install --target=x86_64-efi --efi-directory=/boot/efi --no-nvram
+        # --bootloader-id fixes the ESP path to \EFI\alpine\grubx64.efi.
+        grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=alpine --no-nvram
     else
         echo "    Legacy BIOS boot detected."
         local boot_device disks disk

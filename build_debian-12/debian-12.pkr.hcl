@@ -20,6 +20,8 @@ source "qemu" "baremetal" {
   vm_name          = "debian-12.qcow2"
   output_directory = "output"
   disk_compression = true
+  # Expose discard so blkdiscard in the single-partition step trims freed blocks.
+  disk_discard = "unmap"
 
   accelerator = "kvm"
   cpus        = 2
