@@ -93,7 +93,7 @@ if [ -n "$efi_dev" ]; then
     efi_partnum="${efi_dev##*[!0-9]}"
     rsync -aSH /boot/efi/ /boot_efi.new/
     umount /boot/efi
-    blkdiscard "$efi_dev"
+    blkdiscard "$efi_dev" || true
 fi
 if [ -n "$boot_dev" ]; then
     echo "Merging /boot ($boot_dev) into the root filesystem"
@@ -107,7 +107,7 @@ if [ -n "$boot_dev" ]; then
         rsync -aSH /boot_efi.new/ /boot/efi/
         rm -rf /boot_efi.new
     fi
-    blkdiscard "$boot_dev"
+    blkdiscard "$boot_dev" || true
     [ -n "$efi_partnum" ] && parted "/dev/$root_disk" -s "rm $efi_partnum"
     parted "/dev/$root_disk" -s "rm $boot_partnum"
 elif [ -n "$efi_dev" ]; then
@@ -119,7 +119,7 @@ fi
 lsblk -nro NAME,PARTTYPE "/dev/$root_disk" | while read -r part parttype; do
     if [ "$parttype" = "21686148-6449-6e6f-744e-656564454649" ]; then
         echo "Removing bios_grub stub partition /dev/$part"
-        blkdiscard "/dev/$part"
+        blkdiscard "/dev/$part" || true
         parted "/dev/$root_disk" -s "rm ${part##*[!0-9]}"
     fi
 done
