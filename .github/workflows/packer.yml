@@ -18,6 +18,8 @@ jobs:
           - dir: build_alpine
             packer_file: alpine.pkr.hcl
             output: alpine.qcow2
+            wrap: true      # Alpine ships a partitionless whole-disk fs
+
           - dir: build_debian-12
             packer_file: debian-12.pkr.hcl
             output: debian-12.qcow2
@@ -56,7 +58,13 @@ jobs:
         working-directory: ${{ matrix.dir }}
         run: |
           PACKER_LOG=1 packer build -parallel-builds=1 "${{ matrix.packer_file }}"
-          sha512sum "output/${{ matrix.output }}" > "output/${{ matrix.output }}.sha512"
+      - name: Convert to a single-partition image
+        if: matrix.wrap
+        working-directory: ${{ matrix.dir }}
+        run: ../tools/wrap-single-partition.sh "output/${{ matrix.output }}"
+      - name: Checksum
+        working-directory: ${{ matrix.dir }}
+        run: sha512sum "output/${{ matrix.output }}" > "output/${{ matrix.output }}.sha512"
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
