@@ -42,7 +42,10 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            qemu-system-x86 qemu-utils guestfs-tools genisoimage
+            qemu-system-x86 qemu-utils genisoimage
+          # guestfish is a separate package (only recommended by guestfs-tools);
+          # install it with recommends so its appliance/supermin deps come too.
+          sudo apt-get install -y guestfish
       - name: Install Packer
         uses: hashicorp/setup-packer@main
         with:
