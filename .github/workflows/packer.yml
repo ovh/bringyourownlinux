@@ -2,9 +2,10 @@
 name: Builder
 on:  # yamllint disable-line rule:truthy
   push:
+    branches: ['**']         # build on every commit push (no release)
     tags:
-      - '[0-9]+.[0-9]+*'     # 1.0, 10.2.3, ...
-      - 'v[0-9]+.[0-9]+*'    # v0.1.0, v1.2, ...
+      - '[0-9]+.[0-9]+*'     # 1.0, 10.2.3, ... (build + release)
+      - 'v[0-9]+.[0-9]+*'    # v0.1.0, v1.2, ... (build + release)
   schedule:
     - cron: '0 3 * * 1'      # weekly rebuild, Mondays 03:00 UTC
   workflow_dispatch:
