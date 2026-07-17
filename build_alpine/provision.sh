@@ -58,6 +58,16 @@ EOF
 echo 'features="ata base ide scsi usb virtio nvme raid lvm ext4 xfs btrfs network"' \
     > /etc/mkinitfs/mkinitfs.conf
 
+# OVHcloud delivers first-boot customizations via an OpenStack config drive.
+# The Alpine "nocloud" image only searches the NoCloud datasource, so cloud-init
+# finds nothing and fails at first boot ("Did not find any data source"). Search
+# ConfigDrive (OVHcloud) and NoCloud; None last so a missing datasource never
+# fails the boot.
+mkdir -p /etc/cloud/cloud.cfg.d
+cat > /etc/cloud/cloud.cfg.d/90-datasource.cfg <<'EOF'
+datasource_list: [ ConfigDrive, NoCloud, None ]
+EOF
+
 # The Alpine cloud image is a whole-disk filesystem with no partition table, which
 # BYOL rejects ("too many partitions", from the SYSLINUX boot sector being misread
 # as an MBR). It is converted into a single-partition image after the build by
