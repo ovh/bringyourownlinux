@@ -72,6 +72,12 @@ apt-get install --no-install-recommends -y \
 systemctl enable zfs-import-scan.service
 apt-get dist-upgrade -y
 
+# Ship only the 5.15 HWE kernel: purge the GA 5.4 kernel (this also drops the GA
+# metapackages that depend on it). Removing the running kernel's files is safe in
+# the build VM — it runs from RAM and the VM is powered off next.
+apt-get purge -y 'linux-image-5.4.*' 'linux-headers-5.4.*' \
+    'linux-modules-5.4.*' 'linux-modules-extra-5.4.*' || true
+
 ### Phase 4: Cleanup (before the download-only steps so those persist) ###
 
 apt-get autoremove --purge -y
