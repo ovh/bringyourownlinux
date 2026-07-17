@@ -35,11 +35,11 @@ apk add --no-cache \
     findmnt \
     lsblk
 
-### Phase 2: Network and GRUB configuration ###
+### Phase 2: GRUB configuration ###
 
-# Remove the cloud image's static network configuration so cloud-init manages
-# networking at first boot.
-rm -f /etc/network/interfaces
+# Keep /etc/network/interfaces: the Alpine cloudinit image manages networking
+# from the config drive, and Alpine's ifupdown "networking" service hard-fails if
+# the file is missing (which also blocks chronyd). Do not remove it.
 
 # GRUB defaults for bare-metal (console params are added at deploy time by
 # make_image_bootable.sh).
