@@ -13,8 +13,7 @@ pacman -Syu --noconfirm
 
 # Bare-metal tooling: RAID/LVM/filesystems, microcodes, early NIC firmware, plus
 # the partition tools used by the single-partition step below.
-# linux-firmware-intel carries ice.pkg for Intel E810 NICs; mkinitcpio-nfs-utils
-# loads networking drivers early so cloud-init works on first boot.
+# linux-firmware-intel carries ice.pkg for Intel E810 NICs.
 pacman -S --noconfirm --needed \
     mdadm \
     lvm2 \
@@ -24,7 +23,6 @@ pacman -S --noconfirm --needed \
     linux-firmware-intel \
     intel-ucode \
     amd-ucode \
-    mkinitcpio-nfs-utils \
     parted \
     rsync
 
@@ -39,8 +37,10 @@ sed -i 's/GRUB_CMDLINE_LINUX_DEFAULT=.*/GRUB_CMDLINE_LINUX_DEFAULT=""/' /etc/def
 sed -i 's/GRUB_CMDLINE_LINUX=.*/GRUB_CMDLINE_LINUX="nomodeset iommu=pt"/' /etc/default/grub
 sed -i 's/GRUB_GFXPAYLOAD_LINUX=.*/GRUB_GFXPAYLOAD_LINUX="text"/' /etc/default/grub
 
-# Initramfs hooks: microcode early, mdadm/LVM and networking for bare-metal.
-sed -i 's/^HOOKS=.*/HOOKS=(base systemd autodetect microcode modconf kms keyboard keymap sd-vconsole block mdadm_udev lvm2 net filesystems fsck)/' /etc/mkinitcpio.conf
+# Initramfs hooks: microcode early, plus mdadm/LVM for bare-metal. No "net" hook:
+# it targets the busybox init and is incompatible with the systemd hook (and the
+# local-root image does not need networking in the initramfs).
+sed -i 's/^HOOKS=.*/HOOKS=(base systemd autodetect microcode modconf kms keyboard keymap sd-vconsole block mdadm_udev lvm2 filesystems fsck)/' /etc/mkinitcpio.conf
 
 ### Phase 3: Single-partition image (BYOL requires exactly one partition) ###
 # Merge the ESP into the root filesystem and delete the extra partitions; the
