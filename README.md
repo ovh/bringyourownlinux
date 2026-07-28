@@ -176,7 +176,8 @@ You can use a home-made script with a payload like this one:
     "configDriveMetadata": {
       "role": "webserver",
       "env": "prod"
-    }
+    },
+    "enableLacpBonding": true
   }
 }
 ```
@@ -215,6 +216,7 @@ The key elements here are:
     In this example, we use Basic authentication
 - `customizations/configDriveUserData`: standard cloud-init [user-data](https://cloudinit.readthedocs.io/en/latest/explanation/format.html) — typically a `#cloud-config` document or a script (see the [official cloud-init examples](https://docs.cloud-init.io/en/latest/reference/examples.html)). Equivalent to OpenStack's `server create --user-data <file>`. Sent base64-encoded.
 - `customizations/configDriveMetadata`: arbitrary key/value pairs written to the config drive's `meta_data.json` under the `meta` key. This is the equivalent of OpenStack's [`server create --property key=value`](https://docs.openstack.org/nova/latest/user/metadata.html#openstack-format-metadata); cloud-init exposes it to the running system at first boot.
+- `customizations/enableLacpBonding`: aggregates the server's network interfaces with LACP, on servers that actually have interfaces to bond. It is disabled by default. The resulting bonds are described in the config drive network configuration, so your image must be able to apply it.
 - The other items in `customizations` are self-explanatory
 
 > **Note:** Unlike standard OVHcloud OS templates (e.g. Debian 12, Windows Server), BYOLinux does not support the `postInstallationScript` customization option. To run commands or scripts after installation, use `configDriveUserData` with a cloud-init [`runcmd`](https://cloudinit.readthedocs.io/en/latest/reference/modules.html#runcmd) directive instead.
